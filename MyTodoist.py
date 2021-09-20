@@ -239,6 +239,7 @@ class MyTask:
             self.parent = t['parent_id'] #int or None
             self.due = try_parsing_datetime(t['due']['date']) #datetime
             self.recurring = t['due']['is_recurring'] #bool
+            self.isHabit = getLabel('Habit') in t['labels'] #bool
             self.mig = self.recurring is False and (self.due.date() > today) #bool
             self.labels = t['labels'] #List[int]
             self.priority = t['priority'] #int
@@ -257,11 +258,8 @@ class MyTask:
         ls = getLabel('Started')
         if self.completed is True:
             return ':mdot_greencomp: '
-        elif self.recurring is True:
-            if ls in self.labels:
-                return ':mdot_lavenderstart: '
-            else:
-                return ':mdot_lavender: '
+        elif self.isHabit is True:
+            return ':mdot_lavenderstart: ' if ls in self.labels else ':mdot_lavender: '
         elif self.recurring is False and self.due.date() > today:
             return emotes[5 - self.priority] + 'mig: '
         elif ls in self.labels:
