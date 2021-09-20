@@ -203,7 +203,7 @@ class Section:
             compCount = self.completionCount()
             res = [f'**SECTION: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'] if self.id else []
             if self.completion() < 1:
-                self.tasks.sort(key=lambda x: (int(x.completed), int(x.recurring), -x.priority, x.due))
+                self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
                 data = list(map(lambda s: s.toString(self.id != 0, 1, completed), list(filter(lambda t: not t.completed, self.tasks))))
                 res += [x[0] for x in data]
                 offset += sum(x[1] for x in data) + len(res) * (tab_to_spaces * tab_offsets['task'](self.id != 0) + 1)
