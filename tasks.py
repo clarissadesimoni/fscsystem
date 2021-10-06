@@ -18,7 +18,7 @@ def getEvents():
     length = 0
     for i in range(len(ev)):
         try:
-            end = ev[i].split(' - ')[1].split(':')
+            end = ev[i].split(' - ')[-1].split(':')
             end = time(int(end[0]), int(end[1]))
             if datetime.combine(today, end) <= datetime.now():
                 ev[i] = '\t:mdot_darkbluex: ' + str(ev[i])
