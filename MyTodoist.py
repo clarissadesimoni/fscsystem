@@ -211,7 +211,7 @@ class Section:
         else:
             if self.completion() > 0:
                 res = [f'**SECTION: {self.name}**'] if self.id else []
-                self.tasks.sort(key=lambda x: (int(x.completed), int(x.recurring), -x.priority, x.due))
+                self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
                 data = list(map(lambda s: s.toString(self.id != 0, 1, completed), list(filter(lambda t: t.completed, self.tasks))))
                 res += [x[0] for x in data]
                 offset += sum(x[1] for x in data) + len(res) * (tab_to_spaces * tab_offsets['task'](self.id != 0) + 1)
@@ -268,6 +268,7 @@ class MyTask:
             return emotes[5 - self.priority] + ': '
     
     def toString(self, section_name, level=0, completed=False):
+        self.subtasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
         data = [st.toString(section_name, level + 1) for st in list(filter(lambda t: t.completed == completed, self.subtasks))]
         comp = self.isCompleted()
         res = ('\n' + ('\t' * (tab_offsets['task'](section_name) + level))).join([self.bullet() + self.name + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%)' if len(self.subtasks) else '')] + [st[0] for st in data])
