@@ -1,7 +1,13 @@
 from datetime import date, datetime, timedelta
-from todoist.api import TodoistAPI
+from todoist_api_python.api import TodoistAPI
 from pathlib import Path
-import pyperclip, os, re, json
+import os, re, json, platform
+
+is_mobile = 'Darwin' in platform.platform()
+if is_mobile:
+	import clipboard
+else:
+	import pyperclip
 
 utils = json.load(open('creds_and_info.json'))
 token = utils['todoist_token']
@@ -9,8 +15,7 @@ today = date.today()
 file_dir = os.path.dirname(os.path.realpath(__file__))
 file_name = f"{file_dir}/{today.strftime('%Y%m%d')}.txt"
 api = TodoistAPI(token)
-api.sync()
-labelsDict = {label['name']:label['id'] for label in api.state['labels']}
+labelsDict = {label.name:label.id for label in api.get_labels()}
 
 all_tasks = []
 tab_offsets = {
@@ -43,10 +48,10 @@ class TaskList:
     def projectsToUse(self):
         return sorted(self.projects.values(), key=lambda x: (x.priorityDict()[1], x.priorityDict()[2], x.priorityDict()[3], x.priorityDict()[4], x.priorityDict()['r']), reverse=True)
     
-    def listTaskIDs(self):
+    def listTaskIDs(self, completed=[False, True]):
         data = []
         for p in self.projects.values():
-            data = data + p.listTaskIDs()
+            data = data + p.listTaskIDs(completed=completed)
         return data
     
     def completionCount(self, countMig=False, countHabits=True):
@@ -72,7 +77,7 @@ class TaskList:
 class Project:
     def __init__(self, id):
         self.id = id
-        self.name = api.projects.get_by_id(id)['name']
+        self.name = api.get_project(id).name
         self.sections = {}    #(id: Section)
     
     def addTask(self, section, t):
@@ -96,10 +101,10 @@ class Project:
                 data[priority] += tmp[priority]
         return data
     
-    def listTaskIDs(self):
+    def listTaskIDs(self, completed=[False, True]):
         data = []
         for s in self.sections.values():
-            data = data + s.listTaskIDs()
+            data = data + s.listTaskIDs(completed=completed)
         return data
     
     def completionCount(self, countMig=False, countHabits=True):
@@ -145,7 +150,7 @@ class Project:
 class Section:
     def __init__(self, id):
         self.id = id
-        self.name = api.sections.get_by_id(id)['name'] if id != 0 else 'No section'
+        self.name = api.get_section(id).name if id != 0 else 'No section'
         self.tasks = []
         
     def addTask(self, t):
@@ -170,10 +175,10 @@ class Section:
                     data[5 - t.priority] += 1
         return data
     
-    def listTaskIDs(self):
+    def listTaskIDs(self, completed=[False, True]):
         data = []
         for t in self.tasks:
-            data = data + t.listTaskIDs()
+            data = data + t.listTaskIDs(completed=completed)
         return data
     
     def getCompletedTasks(self):
@@ -233,17 +238,17 @@ class Section:
 
 class MyTask:
     def __init__(self, id=None, api_obj=None):
-            self.id = id if api_obj is None else api_obj.data['id'] #int
-            t = api.items.get_by_id(id) if api_obj is None else api_obj
-            self.name = t['content'] #str
-            self.parent = t['parent_id'] #int or None
-            self.due = try_parsing_datetime(t['due']['date']) #datetime
-            self.recurring = t['due']['is_recurring'] #bool
-            self.isHabit = getLabel('Habit') in t['labels'] #bool
+            self.id = id if api_obj is None else api_obj.id #int
+            t = api.get_task(id) if api_obj is None else api_obj
+            self.name = t.content #str
+            self.parent = t.parent_id #int or None
+            self.due = try_parsing_datetime(t.due.date) #datetime
+            self.recurring = t.due.recurring #bool
+            self.isHabit = getLabel('Habit') in t.label_ids #bool
             self.mig = self.recurring is False and (self.due.date() > today) #bool
-            self.labels = t['labels'] #List[int]
-            self.priority = t['priority'] #int
-            self.completed = t['checked'] == 1 or (t['due']['is_recurring'] is True and self.due.date() > today) #bool
+            self.labels = t.label_ids #List[int]
+            self.priority = t.priority #int
+            self.completed = t.completed == 1 or (t.due.recurring is True and self.due.date() > today) #bool
             self.category = 'easy' if le in self.labels else 'med' if lm in self.labels else 'hard' if lh in self.labels else 'OOF' #str
             self.bullet2 = {'easy': ':mdot_green: ', 'med': ':mdot_yellow: ', 'hard': ':mdot_red: '}.get(self.category, '') #str
             self.subtasks = [MyTask(api_obj=st) for st in all_tasks.get(self.id, [])]
@@ -274,8 +279,8 @@ class MyTask:
         res = ('\n' + ('\t' * (tab_offsets['task'](section_name) + level))).join([self.bullet() + self.name + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%)' if len(self.subtasks) else '')] + [st[0] for st in data])
         return res, sum(e[1] for e in data) + len(data) * (tab_to_spaces * (tab_offsets['task'](section_name) + level) + 1) + emotes_offset
     
-    def listTaskIDs(self):
-        data = [self.id]
+    def listTaskIDs(self, completed=[False, True]):
+        data = [self.id] if self.completed in completed else []
         for t in self.subtasks:
             data = data + t.listTaskIDs()
         return data
@@ -315,27 +320,29 @@ def getItemAttribute(item, attribute):
 
 
 def simplifyTasks(tasks):
-    tmp = map(lambda x: getItemAttribute(x, 'parent_id'), tasks)
-    return {x: [y for y in tasks if getItemAttribute(y, 'parent_id') == x] for x in tmp}
+    tmp = map(lambda x: x.parent_id, tasks)
+    return {x: [y for y in tasks if y.parent_id == x] for x in tmp}
 
 
-def getTodoist(toCheck=[], to_filter=None):
-    api.sync()
+def getTodoist(to_check=[], to_filter=None):
     tlist = TaskList()
     global all_tasks
     ld = getLabel('Discord')
-    for item in api.state['items']:
-        if getItemAttribute(item, 'id') in toCheck:
-            all_tasks.append(item)
-        elif getItemAttribute(item, 'due') is not None and ld in getItemAttribute(item, 'labels') and (isinstance(to_filter, list) and all(labelsDict[l] in item['labels'] for l in to_filter) or not isinstance(to_filter, list)):
-            try:
-                if try_parsing_datetime(getItemAttribute(item, 'due')['date']).date() <= today and getItemAttribute(item, 'checked') == 0:
-                    all_tasks.append(item)
-            except:
-                print(item.data.items())
+    filter_str = 'today & @Discord' + (' & @'.join(to_filter) if isinstance(to_filter, list) else f' & @{to_filter}' if isinstance(to_filter, str) else '')
+    all_tasks = sorted(api.get_tasks(filter=filter_str))
+    missing = set(to_check) - {t.id for t in all_tasks}
+    if len(to_check) > 0 and len(missing) > 0:
+        for task in missing:
+            all_tasks.append(api.get_task(task))
+    i = 0
+    while i < len(all_tasks) - 1:
+        if all_tasks[i].id == all_tasks[i + 1].id:
+            all_tasks.pop(i)
+        else:
+            i += 1
     all_tasks = simplifyTasks(all_tasks)
-    for item in all_tasks[None]:
-        tlist.addTask(item['project_id'], item['section_id'], item['id'])
+    for task in all_tasks[None]:
+        tlist.addTask(task.project_id, task.section_id, task.id)
     return tlist
 
 
@@ -371,7 +378,10 @@ def updateFile(tasks):
 def printStrings(strings):
     print(f'There are {len(strings)} segments')
     for i, s in enumerate(strings):
-        pyperclip.copy(s)
+        if is_mobile:
+            clipboard.set(s)
+        else:
+            pyperclip.copy(s)
         if i < len(strings) - 1:
             input('Press enter to continue...')
     print('Finished!')

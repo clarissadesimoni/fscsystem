@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 from datetime import datetime, date, time, timedelta
-import  sys, math
+import  sys, math, platform
 import MyTodoist
 tlist = None
 today = date.today()
+is_mobile = 'Darwin' in platform.platform()
 
 def backend():
     global tlist
@@ -13,17 +14,23 @@ def backend():
 
 
 def getEvents():
-    ev = open('events.txt').read().split('\n')
+    try:
+        ev = open('events.txt').read().split('\n')
+    except:
+        ev = []
     ev = list(filter(lambda l: len(l), ev))
     length = 0
     for i in range(len(ev)):
         try:
-            end = ev[i].split(' - ')[-1].split(':')
-            end = time(int(end[0]), int(end[1]))
-            if datetime.combine(today, end) <= datetime.now():
-                ev[i] = '\t:mdot_darkbluex: ' + str(ev[i])
+            start = ev[i].split(' @ ')[1].split(' - ')[0].split(':')
+            start = time(int(start[0]), int(start[1]))
+            if ev[i].split(' - ')[-1] == '...':
+                completed = datetime.combine(today, start) <= datetime.now()
             else:
-                ev[i] = '\t:mdot_darkblue: ' + str(ev[i])
+                end = ev[i].split(' - ')[-1].split(':')
+                end = time(int(end[0]), int(end[1]))
+                completed = datetime.combine(today, end) <= datetime.now()
+            ev[i] = '\t:mdot_darkblue' + ('x' if completed else '') + ': ' + str(ev[i])
         except:
             continue
     ev.insert(0, '**EVENTS:**')
@@ -71,4 +78,6 @@ def tasklist(publish=True, ssh=False):
         open('tasklist.txt', 'w').write('\n\n\n'.join(createString(tlist)))
 
 if __name__ == '__main__':
-    tasklist(publish='publish' in sys.argv, ssh='ssh' in sys.argv)
+    tasklist(publish='publish' in sys.argv or is_mobile, ssh='ssh' in sys.argv)
+
+tasklist(True)
