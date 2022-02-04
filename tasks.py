@@ -79,5 +79,3 @@ def tasklist(publish=True, ssh=False):
 
 if __name__ == '__main__':
     tasklist(publish='publish' in sys.argv or is_mobile, ssh='ssh' in sys.argv)
-
-tasklist(True)
