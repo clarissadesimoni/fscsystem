@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 from datetime import datetime, date, time, timedelta
 import  sys, math, platform
 import MyTodoist
@@ -19,7 +17,7 @@ def getEvents():
     except:
         ev = []
     ev = list(filter(lambda l: len(l), ev))
-    length = 0
+    # length = 0
     for i in range(len(ev)):
         try:
             start = ev[i].split(' @ ')[1].split(' - ')[0].split(':')
@@ -30,15 +28,17 @@ def getEvents():
                 end = ev[i].split(' - ')[-1].split(':')
                 end = time(int(end[0]), int(end[1]))
                 completed = datetime.combine(today, end) <= datetime.now()
-            ev[i] = '\t:mdot_darkblue' + ('x' if completed else '') + ': ' + str(ev[i])
+            tmp = '\t:mdot_darkblue' + ('x' if completed else '') + ': ' + str(ev[i])
+            ev[i] = [tmp, len(tmp) + MyTodoist.emotes_offset + MyTodoist.tab_to_spaces]
         except:
             continue
-    ev.insert(0, '**EVENTS:**')
-    ev.append('')
-    length += len(ev) + len(ev) * (MyTodoist.emotes_offset + MyTodoist.tab_to_spaces)
-    ev = '\n'.join(ev)
-    length += len(ev)
-    return [ev, length]
+    ev.insert(0, ['**EVENTS:**', len('**EVENTS:**')])
+    ev.append(['', 0])
+    return ev
+    # length += len(ev) + len(ev) * (MyTodoist.emotes_offset + MyTodoist.tab_to_spaces)
+    # ev = '\n'.join(ev)
+    # length += len(ev)
+    # return [ev, length]
 
 
 def createString(tlist):
@@ -54,11 +54,13 @@ def createString(tlist):
     }
     body = []
     string = (':hline:' * hlineNum) + '\n' + f"**{headerEmojiDict[math.floor(completionNormal * 2)]} DAILY TASKS {today.strftime('%d/%m/%Y')}** {headerEmojiDict[math.floor(completionNormal * 2)]} Last update: {datetime.now().strftime('%I:%M %p')}" + '\n' + (':hline:' * hlineNum) + '\n'
-    body.append([string, hlineNum * 2 * 20 + len(string)])
-    body.append(getEvents())
+    body.append([string, hlineNum * 2 * MyTodoist.emotes_offset + len(string)])
+    body += getEvents()
     string = '**TASKS:**'
     body.append([string, len(string)])
-    body += [p.toString() for p in tlist.projectsToUse()]
+    # body += [p.toString() for p in tlist.projectsToUse()]
+    for p in tlist.projectsToUse():
+        body.extend(p.toString())
     string = f'\nDone: {compCountAll[0]}/{compCountAll[1]}: {completionAll:.2%}\nNormal tasks: {compCountNormal[0]}/{compCountNormal[1]}: {completionNormal:.2%}'
     body.append([string, len(string)])
     i = 0

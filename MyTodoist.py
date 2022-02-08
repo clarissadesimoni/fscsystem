@@ -125,20 +125,21 @@ class Project:
         data = []
         if not completed:
             compCount = self.completionCount()
-            res = [f'**PROJECT: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})']
-            if self.completion() < 1:
-                sec = sorted(self.sections.values(), key=lambda x: (x.priorityDict()[1], x.priorityDict()[2], x.priorityDict()[3], x.priorityDict()[4], x.priorityDict()['r']), reverse=True)
-                data = [e.toString() for e in sec]
+            res = f'**PROJECT: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'
         else:
-            res = [f'**PROJECT: {self.name}**']
-            if self.completion() > 0:
-                sec = sorted(self.sections.values(), key=lambda x: (x.priorityDict()[1], x.priorityDict()[2], x.priorityDict()[3], x.priorityDict()[4], x.priorityDict()['r']), reverse=True)
-                data = [e.toString(completed=completed) for e in sec]
-                data = list(filter(lambda e: len(e[0]) > 0, data))
-        strings = [e[0] for e in data]
-        res = ('\n' + '\t' * tab_offsets['section']).join(res + strings)
-        length = sum([s[1] for s in data]) + len(strings) * tab_to_spaces * tab_offsets['section'] + len(res)
-        return [res, length]
+            res = f'**PROJECT: {self.name}**'
+        sec = sorted(self.sections.values(), key=lambda x: (x.priorityDict()[1], x.priorityDict()[2], x.priorityDict()[3], x.priorityDict()[4], x.priorityDict()['r']), reverse=True)
+        # data = [e.toString(completed=completed) for e in sec]
+        # data = list(filter(lambda e: len(e[0]) > 0, data))
+        res = [[res, len(res)]]
+        for s in sec:
+            res.extend(s.toString(completed=completed))
+        res.extend(data)
+        return res
+        # strings = [e[0] for e in data]
+        # res = ('\n' + '\t' * tab_offsets['section']).join(res + strings)
+        # length = sum([s[1] for s in data]) + len(strings) * tab_to_spaces * tab_offsets['section'] + len(res)
+        # return [res, length]
     
     def getUncompletedTasks(self, countMig=False, countHabits=True):
         res = []
@@ -203,25 +204,17 @@ class Section:
     
     def toString(self, completed=False):
         res = ''
-        offset = 0
         if not completed:
             compCount = self.completionCount()
-            res = [f'**SECTION: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'] if self.id else []
-            if self.completion() < 1:
-                self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
-                data = list(map(lambda s: s.toString(self.id != 0, 1, completed), list(filter(lambda t: not t.completed, self.tasks))))
-                res += [x[0] for x in data]
-                offset += sum(x[1] for x in data) + len(res) * (tab_to_spaces * tab_offsets['task'](self.id != 0) + 1)
-            res = ('\n' + '\t' * tab_offsets['task'](self.id != 0)).join(res)
+            res = f'**SECTION: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'
         else:
-            if self.completion() > 0:
-                res = [f'**SECTION: {self.name}**'] if self.id else []
-                self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
-                data = list(map(lambda s: s.toString(self.id != 0, 1, completed), list(filter(lambda t: t.completed, self.tasks))))
-                res += [x[0] for x in data]
-                offset += sum(x[1] for x in data) + len(res) * (tab_to_spaces * tab_offsets['task'](self.id != 0) + 1)
-            res = ('\n' + '\t' * tab_offsets['task'](self.id != 0)).join(res)
-        return res, offset
+            res = f'**SECTION: {self.name}**'
+        res = [[('\t' * tab_offsets['section']) + res, len(res) + (tab_offsets['section'] * tab_to_spaces)]] if self.id else []
+        self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
+        data = list(filter(lambda t: t.completed == completed, self.tasks))
+        for d in data:
+            res.extend(d.toString(self.id != 0, 0, completed))
+        return res
     
     def getUncompletedTasks(self, countMig=False, countHabits=True):
         lh = getLabel('Habit')
@@ -272,12 +265,21 @@ class MyTask:
         else:
             return emotes[5 - self.priority] + ': '
     
-    def toString(self, section_name, level=0, completed=False):
+    def toString(self, is_section_named, level=0, completed=False):
         self.subtasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
-        data = [st.toString(section_name, level + 1) for st in list(filter(lambda t: t.completed == completed, self.subtasks))]
+        data = list(filter(lambda t: t.completed == completed, self.subtasks))
         comp = self.isCompleted()
-        res = ('\n' + ('\t' * (tab_offsets['task'](section_name) + level))).join([self.bullet() + self.name + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%)' if len(self.subtasks) else '')] + [st[0] for st in data])
-        return res, sum(e[1] for e in data) + len(data) * (tab_to_spaces * (tab_offsets['task'](section_name) + level) + 1) + emotes_offset
+        res = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%)' if len(self.subtasks) else '')
+        res = [('\t' * (tab_offsets['task'](is_section_named) + level)) + res, len(res) + emotes_offset + ((tab_offsets['task'](is_section_named) + level) * tab_to_spaces)]
+        if len(data) > 0:
+            res = [res]
+            for st in data:
+                if len(st.subtasks) > 0:
+                    res.extend(st.toString(is_section_named, level + 1))
+                else:
+                    res.append(st.toString(is_section_named, level + 1))
+        return res
+
     
     def listTaskIDs(self, completed=[False, True]):
         data = [self.id] if self.completed in completed else []
