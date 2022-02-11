@@ -72,12 +72,14 @@ def createString(tlist):
             i += 1
     return [b[0] for b in body]
 
-def tasklist(publish=True, ssh=False):
+def tasklist(publish=True, mobile=False):
     backend()
     if publish:
         MyTodoist.printStrings(createString(tlist))
-    if ssh:
-        open('tasklist.txt', 'w').write('\n\n\n'.join(createString(tlist)))
+    if mobile:
+        res = '\n\n\n'.join(createString(tlist))
+        print(res)
+        open('/Users/clarissadesimoni/Desktop/tasklist.txt', 'w').write(res)
 
 if __name__ == '__main__':
-    tasklist(publish='publish' in sys.argv or is_mobile, ssh='ssh' in sys.argv)
+    tasklist(publish='publish' in sys.argv or is_mobile, mobile='mobile' in sys.argv)

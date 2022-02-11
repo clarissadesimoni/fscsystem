@@ -32,7 +32,7 @@ le = getLabel('Easy')
 lm = getLabel('Medium')
 lh = getLabel('Hard')
 
-emotes_offset = 20
+emotes_offset = 21
 tab_to_spaces = 4
 
 
@@ -213,7 +213,10 @@ class Section:
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
         data = list(filter(lambda t: t.completed == completed, self.tasks))
         for d in data:
-            res.extend(d.toString(self.id != 0, 0, completed))
+            if len(d.subtasks) > 0:
+                res.extend(d.toString(self.id != 0, 0, completed))
+            else:
+                res.append(d.toString(self.id != 0, 0, completed))
         return res
     
     def getUncompletedTasks(self, countMig=False, countHabits=True):
@@ -266,7 +269,7 @@ class MyTask:
             return emotes[5 - self.priority] + ': '
     
     def toString(self, is_section_named, level=0, completed=False):
-        self.subtasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
+        self.subtasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due, int(x.name.split(' ')[-1]) if any(x.name.startswith(y) for y in ['PDF', 'Ex', 'Es']) else 0))
         data = list(filter(lambda t: t.completed == completed, self.subtasks))
         comp = self.isCompleted()
         res = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%)' if len(self.subtasks) else '')
