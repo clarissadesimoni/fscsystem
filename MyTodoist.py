@@ -129,17 +129,11 @@ class Project:
         else:
             res = f'**PROJECT: {self.name}**'
         sec = sorted(self.sections.values(), key=lambda x: (x.priorityDict()[1], x.priorityDict()[2], x.priorityDict()[3], x.priorityDict()[4], x.priorityDict()['r']), reverse=True)
-        # data = [e.toString(completed=completed) for e in sec]
-        # data = list(filter(lambda e: len(e[0]) > 0, data))
         res = [[res, len(res)]]
         for s in sec:
             res.extend(s.toString(completed=completed))
         res.extend(data)
         return res
-        # strings = [e[0] for e in data]
-        # res = ('\n' + '\t' * tab_offsets['section']).join(res + strings)
-        # length = sum([s[1] for s in data]) + len(strings) * tab_to_spaces * tab_offsets['section'] + len(res)
-        # return [res, length]
     
     def getUncompletedTasks(self, countMig=False, countHabits=True):
         res = []
@@ -283,7 +277,6 @@ class MyTask:
                     res.append(st.toString(is_section_named, level + 1))
         return res
 
-    
     def listTaskIDs(self, completed=[False, True]):
         data = [self.id] if self.completed in completed else []
         for t in self.subtasks:
