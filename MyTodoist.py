@@ -205,7 +205,7 @@ class Section:
             res = f'**SECTION: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'
         else:
             res = f'**SECTION: {self.name}**'
-        res = [[(indent_str * indent_offsets['section']) + res, len(res) + (indent_offsets['section'] * emotes_offset)]] if self.id else []
+        res = [[(indent_str * indent_offsets['section']) + res, len(res) + (indent_offsets['section'] * (emotes_offset + len(indent_str)))]] if self.id else []
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
         data = list(filter(lambda t: t.completed == completed, self.tasks))
         for d in data:
