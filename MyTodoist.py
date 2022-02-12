@@ -18,7 +18,7 @@ api = TodoistAPI(token)
 labelsDict = {label.name:label.id for label in api.get_labels()}
 
 all_tasks = []
-tab_offsets = {
+indent_offsets = {
     'project': 0,
     'section': 1,
     'task': lambda section_name: 2 if section_name else 1
@@ -34,6 +34,8 @@ lh = getLabel('Hard')
 
 emotes_offset = 21
 tab_to_spaces = 4
+
+indent_str = ':vline:'
 
 
 class TaskList:
@@ -203,7 +205,7 @@ class Section:
             res = f'**SECTION: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'
         else:
             res = f'**SECTION: {self.name}**'
-        res = [[('\t' * tab_offsets['section']) + res, len(res) + (tab_offsets['section'] * tab_to_spaces)]] if self.id else []
+        res = [[(indent_str * indent_offsets['section']) + res, len(res) + (indent_offsets['section'] * emotes_offset)]] if self.id else []
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
         data = list(filter(lambda t: t.completed == completed, self.tasks))
         for d in data:
@@ -251,13 +253,14 @@ class MyTask:
             4: ':mdot_grey'
         }
         ls = getLabel('Started')
+        done, total = self.isCompleted()
         if self.completed is True:
             return ':mdot_greencomp: '
         elif self.isHabit is True:
             return ':mdot_lavenderstart: ' if ls in self.labels else ':mdot_lavender: '
         elif self.recurring is False and self.due.date() > today:
             return emotes[5 - self.priority] + 'mig: '
-        elif ls in self.labels:
+        elif ls in self.labels or 0 < done < total:
             return emotes[5 - self.priority] + 'start: '
         else:
             return emotes[5 - self.priority] + ': '
@@ -267,7 +270,7 @@ class MyTask:
         data = list(filter(lambda t: t.completed == completed, self.subtasks))
         comp = self.isCompleted()
         res = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%)' if len(self.subtasks) else '')
-        res = [('\t' * (tab_offsets['task'](is_section_named) + level)) + res, len(res) + emotes_offset + ((tab_offsets['task'](is_section_named) + level) * tab_to_spaces)]
+        res = [(indent_str * (indent_offsets['task'](is_section_named) + level)) + res, len(res) + emotes_offset + ((indent_offsets['task'](is_section_named) + level) * (emotes_offset + len(indent_str)))]
         if len(data) > 0:
             res = [res]
             for st in data:
