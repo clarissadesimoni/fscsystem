@@ -1,5 +1,5 @@
 from datetime import datetime, date, time, timedelta
-import  sys, math, platform
+import  sys, math, platform, pyperclip
 import MyTodoist
 tlist = None
 today = date.today()
@@ -7,8 +7,17 @@ is_mobile = 'Darwin' in platform.platform()
 
 def backend():
     global tlist
-    tlist = MyTodoist.getTodoist(MyTodoist.getFile())
-    MyTodoist.updateFile(tlist.listTaskIDs())
+    data = MyTodoist.getData()
+    tlist = MyTodoist.getTodoist(data)
+    data = list(set(tlist.listTaskIDs()) - set(data))
+    if len(data) > 0:
+        MyTodoist.updateData(data)
+
+# OLD
+# def backend():
+#     global tlist
+#     tlist = MyTodoist.getTodoist(MyTodoist.getFile())
+#     MyTodoist.updateFile(tlist.listTaskIDs())
 
 
 def getEvents():
@@ -35,10 +44,6 @@ def getEvents():
     ev.insert(0, ['**EVENTS:**', len('**EVENTS:**')])
     ev.append(['', 0])
     return ev
-    # length += len(ev) + len(ev) * (MyTodoist.emotes_offset + MyTodoist.tab_to_spaces)
-    # ev = '\n'.join(ev)
-    # length += len(ev)
-    # return [ev, length]
 
 
 def createString(tlist):
@@ -66,7 +71,7 @@ def createString(tlist):
     i = 0
     while i < len(body) - 1:
         if body[i][1] + body[i + 1][1] <= 1999:
-            body[i] = [body[i][0] + '\n' + body[i + 1][0], body[i][1] + body[i + 1][1]]
+            body[i] = [body[i][0] + '\n' + body[i + 1][0], body[i][1] + 1 + body[i + 1][1]]
             body.pop(i + 1)
         else:
             i += 1
@@ -78,8 +83,11 @@ def tasklist(publish=True, mobile=False):
         MyTodoist.printStrings(createString(tlist))
     if mobile:
         res = '\n\n\n'.join(createString(tlist))
-        print(res)
-        open('/Users/clarissadesimoni/Desktop/tasklist.txt', 'w').write(res)
+        if is_mobile:
+            print(res)
+            open('/Users/clarissadesimoni/Desktop/tasklist.txt', 'w').write(res)
+        else:
+            pyperclip.copy(res)
 
 if __name__ == '__main__':
     tasklist(publish='publish' in sys.argv or is_mobile, mobile='mobile' in sys.argv)

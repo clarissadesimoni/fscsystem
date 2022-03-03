@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 from todoist_api_python.api import TodoistAPI
 from pathlib import Path
+from pymongo import MongoClient
 import os, re, json, platform
 
 is_mobile = 'Darwin' in platform.platform()
@@ -16,6 +17,8 @@ file_dir = os.path.dirname(os.path.realpath(__file__))
 file_name = f"{file_dir}/{today.strftime('%Y%m%d')}.txt"
 api = TodoistAPI(token)
 labelsDict = {label.name:label.id for label in api.get_labels()}
+client = MongoClient(utils['db_url'])
+db = client.todoist_notion_discord
 
 all_tasks = []
 indent_offsets = {
@@ -35,7 +38,7 @@ lh = getLabel('Hard')
 emotes_offset = 21
 tab_to_spaces = 4
 
-indent_str = ':vline:'
+indent_str = ':blank:'
 
 
 class TaskList:
@@ -124,7 +127,6 @@ class Project:
     
     def toString(self, completed=False):
         res = ''
-        data = []
         if not completed:
             compCount = self.completionCount()
             res = f'**PROJECT: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'
@@ -134,7 +136,6 @@ class Project:
         res = [[res, len(res)]]
         for s in sec:
             res.extend(s.toString(completed=completed))
-        res.extend(data)
         return res
     
     def getUncompletedTasks(self, countMig=False, countHabits=True):
@@ -348,11 +349,37 @@ def getTodoist(to_check=[], to_filter=None):
 
 
 def isStartOfDay():
-    if not Path(file_name).is_file():
-        return True
-    else:
-        return not len(open(file_name).read())
+    last_update = db.info.find_one({
+        '_id': 'last_update'
+    })
+    return last_update['value'] == date.today().strftime('%Y-%m-%d')
 
+
+# OLD
+# def isStartOfDay():
+#     if not Path(file_name).is_file():
+#         return True
+#     else:
+#         return not len(open(file_name).read())
+
+def getData():
+    if isStartOfDay():
+        db.todoist.delete_many({})
+        db.info.update_one({
+        	'_id': 'last_update'
+        	},
+        	{
+        		'$set': {
+        			'_id': 'last_update',
+        			'value': date.today().strftime('%Y-%m-%d')
+        		}
+        	},
+        	upsert=True
+        )
+        ids = []
+    else:
+        ids = [int(el['_id']) for el in db.todoist.find({})]
+    return ids
 
 def getFile():
     if isStartOfDay():
@@ -368,6 +395,10 @@ def getFile():
         for line in lines:
             data.append(int(line))
     return data
+
+
+def updateData(tasks):
+    db.todoist.insert_many([{'_id': el} for el in tasks])
 
 
 def updateFile(tasks):
