@@ -352,7 +352,7 @@ def isStartOfDay():
     last_update = db.info.find_one({
         '_id': 'last_update'
     })
-    return last_update['value'] == date.today().strftime('%Y-%m-%d')
+    return last_update['value'] != date.today().strftime('%Y-%m-%d')
 
 
 # OLD

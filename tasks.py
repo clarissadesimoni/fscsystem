@@ -5,6 +5,10 @@ tlist = None
 today = date.today()
 is_mobile = 'Darwin' in platform.platform()
 
+def debugger_is_active() -> bool:
+    gettrace = getattr(sys, 'gettrace', lambda : None)
+    return gettrace() is not None
+
 def backend():
     global tlist
     data = MyTodoist.getData()
@@ -63,7 +67,6 @@ def createString(tlist):
     body += getEvents()
     string = '**TASKS:**'
     body.append([string, len(string)])
-    # body += [p.toString() for p in tlist.projectsToUse()]
     for p in tlist.projectsToUse():
         body.extend(p.toString())
     string = f'\nDone: {compCountAll[0]}/{compCountAll[1]}: {completionAll:.2%}\nNormal tasks: {compCountNormal[0]}/{compCountNormal[1]}: {completionNormal:.2%}'
@@ -90,4 +93,4 @@ def tasklist(publish=True, mobile=False):
             pyperclip.copy(res)
 
 if __name__ == '__main__':
-    tasklist(publish='publish' in sys.argv or is_mobile, mobile='mobile' in sys.argv)
+    tasklist(publish='publish' in sys.argv or is_mobile or debugger_is_active(), mobile='mobile' in sys.argv)

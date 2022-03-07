@@ -70,6 +70,22 @@ def safeInputTime(prompt='', returnObj=False):
     else:
         return res
 
+def safeInputTimedelta(prompt='', returnObj=False):
+    valid = False
+    res = input(prompt)
+    pattern = r'^([0-9]{1,2}[\.:\-_,;=][0-9]{1,2}[\.:\-_,;=][0-9]{1,2})$'
+    valid = re.match(pattern, res)
+    while not valid:
+        print('Invalid input.')
+        res = input(prompt)
+        valid = re.match(pattern, res)
+    res = '0' * (8 - len(res))
+    res = re.sub(r'[\.:\-_,;=]', ':', res)
+    if returnObj:
+        return timedelta(hours=int(res[:2]), minutes=int(res[3:5]), seconds=int(res[6:]))
+    else:
+        return res
+
 def safeInputChoice(accepted, prompt='', canExit=''):
     res = input(prompt)
     while res not in accepted and not res == canExit:
