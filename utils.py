@@ -79,7 +79,7 @@ def safeInputTimedelta(prompt='', returnObj=False):
         print('Invalid input.')
         res = input(prompt)
         valid = re.match(pattern, res)
-    res = '0' * (8 - len(res))
+    res = '0' * (8 - len(res)) + res
     res = re.sub(r'[\.:\-_,;=]', ':', res)
     if returnObj:
         return timedelta(hours=int(res[:2]), minutes=int(res[3:5]), seconds=int(res[6:]))
