@@ -35,6 +35,8 @@ le = getLabel('Easy')
 lm = getLabel('Medium')
 lh = getLabel('Hard')
 
+lls = getLabel('lecturespread')
+
 emotes_offset = 21
 tab_to_spaces = 4
 
@@ -270,6 +272,8 @@ class MyTask:
         self.subtasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due, int(x.name.split(' ')[-1]) if any(x.name.startswith(y) for y in ['PDF', 'Ex', 'Es']) else 0))
         data = list(filter(lambda t: t.completed == completed, self.subtasks))
         comp = self.isCompleted()
+        if lls in self.labels:
+            self.name = self.name.replace(':', '\\:')
         res = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%)' if len(self.subtasks) else '')
         res = [(indent_str * (indent_offsets['task'](is_section_named) + level)) + res, len(res) + emotes_offset + ((indent_offsets['task'](is_section_named) + level) * (emotes_offset + len(indent_str)))]
         if len(data) > 0:
