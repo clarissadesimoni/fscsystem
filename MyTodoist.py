@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from todoist_api_python.api import TodoistAPI
 from pathlib import Path
 from pymongo import MongoClient
-import os, re, json, platform
+import os, re, json, platform, math
 
 is_mobile = 'Darwin' in platform.platform()
 if is_mobile:
@@ -131,11 +131,11 @@ class Project:
         res = ''
         if not completed:
             compCount = self.completionCount()
-            res = f'**PROJECT: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'
+            res = f'**PROJECT: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%}) {generate_progress_bar(self.completion())}'
         else:
             res = f'**PROJECT: {self.name}**'
         sec = sorted(self.sections.values(), key=lambda x: (x.priorityDict()[1], x.priorityDict()[2], x.priorityDict()[3], x.priorityDict()[4], x.priorityDict()['r']), reverse=True)
-        res = [[res, len(res)]]
+        res = [[res, 10 * emotes_offset + len(res)]]
         for s in sec:
             res.extend(s.toString(completed=completed))
         return res
@@ -205,10 +205,10 @@ class Section:
         res = ''
         if not completed:
             compCount = self.completionCount()
-            res = f'**SECTION: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%})'
+            res = f'**SECTION: {self.name}** (Done: {compCount[0]}/{compCount[1]}: {self.completion():.2%}) {generate_progress_bar(self.completion())}'
         else:
             res = f'**SECTION: {self.name}**'
-        res = [[(indent_str * indent_offsets['section']) + res, len(res) + (indent_offsets['section'] * (emotes_offset + len(indent_str)))]] if self.id else []
+        res = [[(indent_str * indent_offsets['section']) + res, 10 * emotes_offset + len(res) + (indent_offsets['section'] * (emotes_offset + len(indent_str)))]] if self.id else []
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
         data = list(filter(lambda t: t.completed == completed, self.tasks))
         for d in data:
@@ -274,8 +274,8 @@ class MyTask:
         comp = self.isCompleted()
         if lls in self.labels:
             self.name = self.name.replace(':', '\\:')
-        res = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%)' if len(self.subtasks) else '')
-        res = [(indent_str * (indent_offsets['task'](is_section_named) + level)) + res, len(res) + emotes_offset + ((indent_offsets['task'](is_section_named) + level) * (emotes_offset + len(indent_str)))]
+        res = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%) {generate_progress_bar(self.completion())}' if len(self.subtasks) else '')
+        res = [(indent_str * (indent_offsets['task'](is_section_named) + level)) + res, 10 * emotes_offset + len(res) + emotes_offset + ((indent_offsets['task'](is_section_named) + level) * (emotes_offset + len(indent_str)))]
         if len(data) > 0:
             res = [res]
             for st in data:
@@ -297,6 +297,10 @@ class MyTask:
             return [sum(d[0] for d in data), sum(d[1] for d in data)]
         else:
             return [int(self.completed), 1]
+    
+    def completion(self):
+        counts = self.isCompleted()
+        return counts[0]/counts[1]
 
 
 def try_parsing_datetime(text):
@@ -328,6 +332,15 @@ def getItemAttribute(item, attribute):
 def simplifyTasks(tasks):
     tmp = map(lambda x: x.parent_id, tasks)
     return {x: [y for y in tasks if y.parent_id == x] for x in tmp}
+
+
+def generate_progress_bar(percentage):
+    res = (':es:' if percentage < 0.1 else ':rs:' if 0.1 <= percentage < 0.2 else ':fs')
+    res += ':fm:' * max(0, math.floor(percentage * 10) - 1)
+    res += ':rm:' if 0.2 <= percentage < 1 else ''
+    res += ':em~1:' * max(0, 10 - math.floor(percentage * 10))
+    res += ':ee:' if percentage < 1 else ':fe:'
+    return res
 
 
 def getTodoist(to_check=[], to_filter=None):

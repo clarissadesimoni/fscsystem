@@ -55,15 +55,15 @@ def createString(tlist):
     completionAll = tlist.completion()
     compCountNormal = tlist.completionCount(countHabits=False)
     completionNormal = tlist.completion(countHabits=False)
-    hlineNum = 19
+    hlineNum = 27
     headerEmojiDict = {
         0: ':mdot_red:',
         1: ':mdot_yellowstart:',
         2: ':mdot_greencomp:'
     }
     body = []
-    string = (':hline:' * hlineNum) + '\n' + f"**{headerEmojiDict[math.floor(completionNormal * 2)]} DAILY TASKS {today.strftime('%d/%m/%Y')}** {headerEmojiDict[math.floor(completionNormal * 2)]} Last update: {datetime.now().strftime('%I:%M %p')}" + '\n' + (':hline:' * hlineNum) + '\n'
-    body.append([string, hlineNum * 2 * MyTodoist.emotes_offset + len(string)])
+    string = (':hline:' * hlineNum) + '\n' + f"**DAILY TASKS {today.strftime('%d/%m/%Y')}** Last update: {datetime.now().strftime('%H:%M')} {MyTodoist.generate_progress_bar(completionNormal)}" + '\n' + (':hline:' * hlineNum) + '\n'
+    body.append([string, (hlineNum * 2 + 10) * MyTodoist.emotes_offset + len(string)])
     body += getEvents()
     string = '**TASKS:**'
     body.append([string, len(string)])
