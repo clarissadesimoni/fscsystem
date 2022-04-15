@@ -335,7 +335,7 @@ def simplifyTasks(tasks):
 
 
 def generate_progress_bar(percentage):
-    res = (':es:' if percentage < 0.1 else ':rs:' if 0.1 <= percentage < 0.2 else ':fs')
+    res = (':es:' if percentage < 0.1 else ':rs:' if 0.1 <= percentage < 0.2 else ':fs:')
     res += ':fm:' * max(0, math.floor(percentage * 10) - 1)
     res += ':rm:' if 0.2 <= percentage < 1 else ''
     res += ':em~1:' * max(0, 10 - math.floor(percentage * 10))
