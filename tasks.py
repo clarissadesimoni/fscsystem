@@ -44,7 +44,8 @@ def getEvents():
             tmp = '\t:mdot_darkblue' + ('x' if completed else '') + ': ' + str(ev[i])
             ev[i] = [tmp, len(tmp) + MyTodoist.emotes_offset + MyTodoist.tab_to_spaces]
         except:
-            continue
+            tmp = '\t:mdot_blossom: ' + str(ev[i]) + ' - All day'
+            ev[i] = [tmp, len(tmp) + MyTodoist.emotes_offset + MyTodoist.tab_to_spaces]
     ev.insert(0, ['**EVENTS:**', len('**EVENTS:**')])
     ev.append(['', 0])
     return ev
@@ -93,4 +94,5 @@ def tasklist(publish=True, mobile=False):
             pyperclip.copy(res)
 
 if __name__ == '__main__':
-    tasklist(publish='publish' in sys.argv or is_mobile or debugger_is_active(), mobile='mobile' in sys.argv)
+    tasklist()
+    # tasklist(publish='publish' in sys.argv or is_mobile or debugger_is_active(), mobile='mobile' in sys.argv)
