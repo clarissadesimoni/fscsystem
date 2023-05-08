@@ -41,11 +41,11 @@ def getEvents():
                 end = ev[i].split(' - ')[-1].split(':')
                 end = time(int(end[0]), int(end[1]))
                 completed = datetime.combine(today, end) <= datetime.now()
-            tmp = '\t:mdot_darkblue' + ('x' if completed else '') + ': ' + str(ev[i])
+            tmp = ':blank::mdot_darkblue' + ('x' if completed else '') + ': ' + str(ev[i])
             ev[i] = [tmp, len(tmp) + MyTodoist.emotes_offset + MyTodoist.tab_to_spaces]
         except:
-            tmp = '\t:mdot_blossom: ' + str(ev[i]) + ' - All day'
-            ev[i] = [tmp, len(tmp) + MyTodoist.emotes_offset + MyTodoist.tab_to_spaces]
+            tmp = ':blank::mdot_blossom: ' + str(ev[i]) + ' - All day'
+            ev[i] = [tmp, len(tmp) + MyTodoist.emotes_offset * 2 + MyTodoist.tab_to_spaces]
     ev.insert(0, ['**EVENTS:**', len('**EVENTS:**')])
     ev.append(['', 0])
     return ev
@@ -56,7 +56,7 @@ def createString(tlist):
     completionAll = tlist.completion()
     compCountNormal = tlist.completionCount(countHabits=False)
     completionNormal = tlist.completion(countHabits=False)
-    hlineNum = 27
+    hlineNum = 25
     headerEmojiDict = {
         0: ':mdot_red:',
         1: ':mdot_yellowstart:',
@@ -70,7 +70,7 @@ def createString(tlist):
     body.append([string, len(string)])
     for p in tlist.projectsToUse():
         body.extend(p.toString())
-    string = f'\nDone: {compCountAll[0]}/{compCountAll[1]}: {completionAll:.2%}\nNormal tasks: {compCountNormal[0]}/{compCountNormal[1]}: {completionNormal:.2%}'
+    string = f'\nDone: {compCountAll[0]}/{compCountAll[1]}: {completionAll:.2%}' #\nNormal tasks: {compCountNormal[0]}/{compCountNormal[1]}: {completionNormal:.2%}'
     body.append([string, len(string)])
     i = 0
     while i < len(body) - 1:
@@ -92,7 +92,7 @@ def tasklist(publish=True, mobile=False):
             open('/Users/clarissadesimoni/Desktop/tasklist.txt', 'w').write(res)
         else:
             pyperclip.copy(res)
+            open('/Users/clarissadesimoni/Desktop/tasklist.txt', 'w').write(res)
 
 if __name__ == '__main__':
-    tasklist()
-    # tasklist(publish='publish' in sys.argv or is_mobile or debugger_is_active(), mobile='mobile' in sys.argv)
+    tasklist(publish='publish' in sys.argv or is_mobile or debugger_is_active(), mobile='mobile' in sys.argv)

@@ -4,11 +4,12 @@ from pathlib import Path
 from pymongo import MongoClient
 import os, re, json, platform, math
 
-is_mobile = 'Darwin' in platform.platform()
-if is_mobile:
-	import clipboard
-else:
-	import pyperclip
+# is_mobile = 'Darwin' in platform.platform()
+# if is_mobile:
+# 	import clipboard
+# else:
+# 	import pyperclip
+import pyperclip
 
 utils = json.load(open('creds_and_info.json'))
 token = utils['todoist_token']
@@ -16,7 +17,6 @@ today = date.today()
 file_dir = os.path.dirname(os.path.realpath(__file__))
 file_name = f"{file_dir}/{today.strftime('%Y%m%d')}.txt"
 api = TodoistAPI(token)
-labelsDict = {label.name:label.id for label in api.get_labels()}
 client = MongoClient(utils['db_url'])
 db = client.todoist_notion_discord
 
@@ -27,17 +27,15 @@ indent_offsets = {
     'task': lambda section_name: 2 if section_name else 1
 }
 
-def getLabel(name):
-    return labelsDict[name]
 
+le = 'Easy'
+lm = 'Medium'
+lh = 'Hard'
 
-le = getLabel('Easy')
-lm = getLabel('Medium')
-lh = getLabel('Hard')
+lsp = 'spread'
+lls = 'lecturespread'
 
-lls = getLabel('lecturespread')
-
-emotes_offset = 21
+emotes_offset = 20
 tab_to_spaces = 4
 
 indent_str = ':blank:'
@@ -185,7 +183,7 @@ class Section:
         return list(filter(lambda t: t.completed, self.tasks))
     
     def completionCount(self, countMig=False, countHabits=True):
-        lh = getLabel('Habit')
+        lh = 'Habit'
         if not countMig and not countHabits:
             tmp = list(filter(lambda t: not t.mig and lh not in t.labels, self.tasks))
         elif not countMig and countHabits:
@@ -209,7 +207,7 @@ class Section:
         else:
             res = f'**SECTION: {self.name}**'
         res = [[(indent_str * indent_offsets['section']) + res, 10 * emotes_offset + len(res) + (indent_offsets['section'] * (emotes_offset + len(indent_str)))]] if self.id else []
-        self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due))
+        self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due, x.order))
         data = list(filter(lambda t: t.completed == completed, self.tasks))
         for d in data:
             if len(d.subtasks) > 0:
@@ -219,7 +217,7 @@ class Section:
         return res
     
     def getUncompletedTasks(self, countMig=False, countHabits=True):
-        lh = getLabel('Habit')
+        lh = 'Habit'
         if not countMig and not countHabits:
             tmp = list(filter(lambda t: not t.mig and lh not in t.labels, self.tasks))
         elif not countMig and countHabits:
@@ -238,14 +236,15 @@ class MyTask:
             self.name = t.content #str
             self.parent = t.parent_id #int or None
             self.due = try_parsing_datetime(t.due.date) #datetime
-            self.recurring = t.due.recurring #bool
-            self.isHabit = getLabel('Habit') in t.label_ids #bool
+            self.recurring = t.due.is_recurring #bool
+            self.isHabit = 'Habit' in t.labels #bool
             self.mig = self.recurring is False and (self.due.date() > today) #bool
-            self.labels = t.label_ids #List[int]
+            self.labels = t.labels #List[int]
             self.priority = t.priority #int
-            self.completed = t.completed == 1 or (t.due.recurring is True and self.due.date() > today) #bool
+            self.completed = t.is_completed == 1 or (t.due.is_recurring is True and self.due.date() > today) #bool
             self.category = 'easy' if le in self.labels else 'med' if lm in self.labels else 'hard' if lh in self.labels else 'OOF' #str
             self.bullet2 = {'easy': ':mdot_green: ', 'med': ':mdot_yellow: ', 'hard': ':mdot_red: '}.get(self.category, '') #str
+            self.order = t.order #int
             self.subtasks = [MyTask(api_obj=st) for st in all_tasks.get(self.id, [])]
     
     def bullet(self):
@@ -255,7 +254,7 @@ class MyTask:
             3: ':mdot_blue',
             4: ':mdot_grey'
         }
-        ls = getLabel('Started')
+        ls = 'Started'
         done, total = self.isCompleted()
         if self.completed is True:
             return ':mdot_greencomp: '
@@ -269,13 +268,13 @@ class MyTask:
             return emotes[5 - self.priority] + ': '
     
     def toString(self, is_section_named, level=0, completed=False):
-        self.subtasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due, int(x.name.split(' ')[-1]) if any(x.name.startswith(y) for y in ['PDF', 'Ex', 'Es']) else 0))
+        self.subtasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due, x.order, int(x.name.split(' ')[-1]) if any(x.name.startswith(y) for y in ['PDF', 'Ex.', 'Es.']) else 0))
         data = list(filter(lambda t: t.completed == completed, self.subtasks))
         comp = self.isCompleted()
-        if lls in self.labels:
+        if lls in self.labels or lsp in self.labels:
             self.name = self.name.replace(':', '\\:')
         res = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%) {generate_progress_bar(self.completion())}' if len(self.subtasks) else '')
-        res = [(indent_str * (indent_offsets['task'](is_section_named) + level)) + res, 10 * emotes_offset + len(res) + emotes_offset + ((indent_offsets['task'](is_section_named) + level) * (emotes_offset + len(indent_str)))]
+        res = [(indent_str * (indent_offsets['task'](is_section_named) + level)) + res, (10 if len(self.subtasks) else 0) * emotes_offset + len(res) + emotes_offset + ((indent_offsets['task'](is_section_named) + level) * (emotes_offset + len(indent_str))) - (2 * res.count('~1'))]
         if len(data) > 0:
             res = [res]
             for st in data:
@@ -335,10 +334,12 @@ def simplifyTasks(tasks):
 
 
 def generate_progress_bar(percentage):
+    if percentage < 0 or percentage > 1:
+        raise ValueError('Percentage must be between 0 and 1')
     res = (':es:' if percentage < 0.1 else ':rs:' if 0.1 <= percentage < 0.2 else ':fs:')
-    res += ':fm:' * max(0, math.floor(percentage * 10) - 1)
+    res += ':fm:' * max(0, math.floor(percentage * 10) - 2)
     res += ':rm:' if 0.2 <= percentage < 1 else ''
-    res += ':em~1:' * max(0, 10 - math.floor(percentage * 10))
+    res += (':em:' * max(0, 9 - math.floor(percentage * 10))) if 0.1 <= percentage < 1 else ':em:' * 8
     res += ':ee:' if percentage < 1 else ':fe:'
     return res
 
@@ -346,7 +347,6 @@ def generate_progress_bar(percentage):
 def getTodoist(to_check=[], to_filter=None):
     tlist = TaskList()
     global all_tasks
-    ld = getLabel('Discord')
     filter_str = 'today & @Discord' + (' & @'.join(to_filter) if isinstance(to_filter, list) else f' & @{to_filter}' if isinstance(to_filter, str) else '')
     all_tasks = sorted(api.get_tasks(filter=filter_str))
     missing = set(to_check) - {t.id for t in all_tasks}
@@ -361,7 +361,7 @@ def getTodoist(to_check=[], to_filter=None):
             i += 1
     all_tasks = simplifyTasks(all_tasks)
     for task in all_tasks[None]:
-        tlist.addTask(task.project_id, task.section_id, task.id)
+        tlist.addTask(task.project_id, task.section_id, task)
     return tlist
 
 
@@ -395,7 +395,7 @@ def getData():
         )
         ids = []
     else:
-        ids = [int(el['_id']) for el in db.todoist.find({})]
+        ids = [el['_id'] for el in db.todoist.find({})]
     return ids
 
 def getFile():
@@ -415,7 +415,10 @@ def getFile():
 
 
 def updateData(tasks):
-    db.todoist.insert_many([{'_id': el} for el in tasks])
+    try:
+        tmp = db.todoist.insert_many([{'_id': el} for el in tasks], ordered=False)
+    except Exception as e:
+        pass
 
 
 def updateFile(tasks):
@@ -427,10 +430,11 @@ def updateFile(tasks):
 def printStrings(strings):
     print(f'There are {len(strings)} segments')
     for i, s in enumerate(strings):
-        if is_mobile:
-            clipboard.set(s)
-        else:
-            pyperclip.copy(s)
+        # if is_mobile:
+        #     clipboard.set(s)
+        # else:
+        #     pyperclip.copy(s)
+        pyperclip.copy(s)
         if i < len(strings) - 1:
             input('Press enter to continue...')
     print('Finished!')
