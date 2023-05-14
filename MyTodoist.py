@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from requests import HTTPError
 from todoist_api_python.api import TodoistAPI
 from pathlib import Path
 from pymongo import MongoClient
@@ -21,6 +22,7 @@ client = MongoClient(utils['db_url'])
 db = client.todoist_notion_discord
 
 all_tasks = []
+to_del = []
 indent_offsets = {
     'project': 0,
     'section': 1,
@@ -46,6 +48,9 @@ class TaskList:
         self.projects = {}      #(id: Project)
     
     def addTask(self, project, section, t):
+        if today.strftime("%Y-%m-%d") not in t.due.date:
+            to_del.append(t.id)
+            return
         if project not in self.projects.keys():
             self.projects[project] = Project(project)
         self.projects[project].addTask(section, t)
@@ -77,6 +82,14 @@ class TaskList:
         for p in self.projects.values():
             res += p.getUncompletedTasks()
         return res
+    
+    def clean_list(self):
+        empty = []
+        for p in self.projects.values():
+            if p.clean_list() == 0:
+                empty.append(p.id)
+        for e in empty:
+            del self.projects[e]
 
 
 class Project:
@@ -142,6 +155,19 @@ class Project:
         res = []
         for s in self.sections.values():
             res += s.getUncompletedTasks(countMig=countMig, countHabits=countHabits)
+        return res
+    
+    def clean_list(self):
+        res = 0
+        tmp = 0
+        empty = []
+        for s in self.sections.values():
+            if (tmp := s.completionCount()[1]) == 0:
+                empty.append(s.id)
+            else:
+                res += tmp
+        for e in empty:
+            del self.sections[e]
         return res
 
 
@@ -210,6 +236,8 @@ class Section:
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.isHabit), -x.priority, x.due, x.order))
         data = list(filter(lambda t: t.completed == completed, self.tasks))
         for d in data:
+            if 'Split' in d.labels and not d.completed and all(s.completed for s in d.subtasks):
+                continue
             if len(d.subtasks) > 0:
                 res.extend(d.toString(self.id != 0, 0, completed))
             else:
@@ -339,20 +367,23 @@ def generate_progress_bar(percentage):
     res = (':es:' if percentage < 0.1 else ':rs:' if 0.1 <= percentage < 0.2 else ':fs:')
     res += ':fm:' * max(0, math.floor(percentage * 10) - 2)
     res += ':rm:' if 0.2 <= percentage < 1 else ''
-    res += (':em:' * max(0, 9 - math.floor(percentage * 10))) if 0.1 <= percentage < 1 else ':em:' * 8
+    res += (':em:' * max(0, 9 - math.floor(percentage * 10))) if 0.1 <= percentage < 1 else ':em:' * 8 if percentage < 0.1 else ''
     res += ':ee:' if percentage < 1 else ':fe:'
     return res
 
 
 def getTodoist(to_check=[], to_filter=None):
     tlist = TaskList()
-    global all_tasks
+    global all_tasks, to_del
     filter_str = 'today & @Discord' + (' & @'.join(to_filter) if isinstance(to_filter, list) else f' & @{to_filter}' if isinstance(to_filter, str) else '')
     all_tasks = sorted(api.get_tasks(filter=filter_str))
     missing = set(to_check) - {t.id for t in all_tasks}
     if len(to_check) > 0 and len(missing) > 0:
         for task in missing:
-            all_tasks.append(api.get_task(task))
+            try:
+                all_tasks.append(api.get_task(task))
+            except HTTPError as e:
+                to_del.append(task)
     i = 0
     while i < len(all_tasks) - 1:
         if all_tasks[i].id == all_tasks[i + 1].id:
@@ -362,6 +393,7 @@ def getTodoist(to_check=[], to_filter=None):
     all_tasks = simplifyTasks(all_tasks)
     for task in all_tasks[None]:
         tlist.addTask(task.project_id, task.section_id, task)
+    tlist.clean_list()
     return tlist
 
 
@@ -398,6 +430,7 @@ def getData():
         ids = [el['_id'] for el in db.todoist.find({})]
     return ids
 
+
 def getFile():
     if isStartOfDay():
         for f in next(os.walk(file_dir))[2]:
@@ -414,11 +447,13 @@ def getFile():
     return data
 
 
-def updateData(tasks):
+def updateData(tasks_to_insert, tasks_to_delete):
     try:
-        tmp = db.todoist.insert_many([{'_id': el} for el in tasks], ordered=False)
+        db.todoist.insert_many([{'_id': el} for el in tasks_to_insert], ordered=False)
     except Exception as e:
         pass
+    if len(tasks_to_delete):
+        db.todoist.delete_many([{'_id': el} for el in tasks_to_delete])
 
 
 def updateFile(tasks):

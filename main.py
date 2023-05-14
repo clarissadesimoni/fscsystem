@@ -6,7 +6,7 @@ import CalendarUtils as cu
 import utils, pyperclip, pytz, re, tasks, completed, studyverse, fsctodo
 import requests as req
 
-from todoist.api import TodoistAPI
+from todoist_api_python.api import TodoistAPI
 
 token = utils['todoist_token']
 today = date.today()
@@ -17,14 +17,14 @@ isDone = False
 
 
 def startOfDay():
-    tu.clearStartedTasks()
+    tu.clear_started_tasks()
     su.clearSheets()
     lu.addLectures()
     startWorking = datetime.combine(today, utils.safeInputTime('At what time did you wake up? ', True))
     coords = su.getCoordinates(today.day)['timesheetRange']
     su.fillInGaps(end=startWorking, startCell=f"{coords['cols'][0]}{coords['rows'][0]}", code='x')
     cu.insert('Sleep', datetime.combine(today, time()), startWorking)
-    allDay, timed = cu.getEvents(list(set(cu.getCalNames()) - {'Todoist', 'Daily tracking'}))
+    allDay, timed = cu.getEvents(list(set(cu.get_cal_names()) - {'Todoist', 'Daily tracking'}))
     print('All day events:\n' + '\n'.join([repr(e) for e in allDay]) + '\nTimed events:\n' + '\n'.join([repr(e) for e in sorted(timed, key=lambda e: e.start)]) + '\n\n')
     while not utils.safeInputBool('Have you planned the tasks on Todoist for the day? '):
         print('Do it now!')
@@ -140,8 +140,8 @@ def addEvent():
     else:
         start = datetime.combine(utils.safeInputDate('Insert start date: ', returnObj=True), utils.safeInputTime('Insert start time: ', returnObj=True))
         end = datetime.combine(utils.safeInputDate('Insert end date: ', returnObj=True), utils.safeInputTime('Insert end time: ', returnObj=True))
-    calName = utils.safeInputChoice(cu.getCalNames(), 'Insert the name of the calendar: (available: ' + ', '.join(cu.getCalNames()) + ')\n')
-    cu.insert(name, start, end, calendarName=calName)
+    calName = utils.safeInputChoice(cu.get_cal_names(), 'Insert the name of the calendar: (available: ' + ', '.join(cu.get_cal_names()) + ')\n')
+    cu.insert(name, start, end, calendar_name=calName)
 
 
 def startProcrastinating():
@@ -183,13 +183,13 @@ def chooseNextTaskTodoist():
             print('There are no tasks to start following these criteria.')
             return
     if utils.safeInputBool('Do you want to filter task by a project? '):
-        pid = tu.getProject(utils.safeInputChoice(tu.getAllProjects(), 'Insert the project name: '))
+        pid = tu.get_project(utils.safeInputChoice(tu.get_all_projects(), 'Insert the project name: '))
         tasks = list(filter(lambda t: t.project == pid, tasks))
         if not len(tasks):
             print('There are no tasks to start following these criteria.')
             return
         if utils.safeInputBool('Do you want to filter task by a section? '):
-            sid = tu.getSection(utils.safeInputChoice(tu.getAllSections(pid), 'Insert the section name: '), pid)
+            sid = tu.get_section(utils.safeInputChoice(tu.get_all_sections(pid), 'Insert the section name: '), pid)
             tasks = list(filter(lambda t: t.section == sid, tasks))
             if not len(tasks):
                 print('There are no tasks to start following these criteria.')
@@ -222,7 +222,7 @@ def chooseNextTaskSheets():
 
 
 def chooseNextTaskCalendar():
-    events = cu.getEvents(list(set(cu.getCalNames()) - {'Todoist', 'Daily tracking'}))[1]
+    events = cu.getEvents(list(set(cu.get_cal_names()) - {'Todoist', 'Daily tracking'}))[1]
     events = {repr(e):e for e in events}
     eventsSelection = list(events.keys())
     eventsSelection.sort(key=lambda e: events[e].start)
@@ -250,10 +250,10 @@ def createTaskTodoist(name):
     project_id = 0
     section_id = 0
     if utils.safeInputBool('Do you want to assign it to a project? '):
-        project_id = tu.getProject(utils.safeInputChoice(tu.getAllProjects().keys(), f"Insert the name of the project (available: {', '.join(tu.getAllProjects().keys())}): "))
-        if len(tu.getAllSections(project_id)):
+        project_id = tu.get_project(utils.safeInputChoice(tu.get_all_projects().keys(), f"Insert the name of the project (available: {', '.join(tu.get_all_projects().keys())}): "))
+        if len(tu.get_all_sections(project_id)):
             if utils.safeInputBool('Do you want to assign it to a section? '):
-                section_id = tu.getSection(utils.safeInputChoice(tu.getAllSections(project_id).keys(), f"Insert the name of the section (available: {', '.join(tu.getAllSections(project_id).keys())}): "), project_id)
+                section_id = tu.get_section(utils.safeInputChoice(tu.get_all_sections(project_id).keys(), f"Insert the name of the section (available: {', '.join(tu.get_all_sections(project_id).keys())}): "), project_id)
     labels = []
     due = None
     priority = 4
@@ -271,7 +271,7 @@ def createTaskTodoist(name):
         duetime = None
         if utils.safeInputBool('Do you want to add a time? '):
             duetime = utils.safeInputTime('Insert the time: ', returnObj=True)
-        due = tu.createDueObj(duedate, duetime=duetime)
+        due = tu.create_due_obj(duedate, due_time=duetime)
     if utils.safeInputBool('Do you want to set a priority? '):
         priority = utils.safeInputInt(list(range(1, 5)), 'Insert a number between 1 and 4: ')
     if utils.safeInputBool('Have you started the task? '):
@@ -540,7 +540,7 @@ def endOfDay():
         if task.recurring:
             api.items.get_by_id(task.id).close()
         else:
-            tu.postponeTask(task.id, tu.createDueObj(today + timedelta(days=1)))
+            tu.postpone_task(task.id, tu.create_due_obj(today + timedelta(days=1)))
     api.commit()
 
 

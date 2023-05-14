@@ -15,7 +15,7 @@ def backend():
     tlist = MyTodoist.getTodoist(data)
     data = list(set(tlist.listTaskIDs()) - set(data))
     if len(data) > 0:
-        MyTodoist.updateData(data)
+        MyTodoist.updateData(data, MyTodoist.to_del)
 
 # OLD
 # def backend():
