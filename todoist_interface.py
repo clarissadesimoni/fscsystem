@@ -1,36 +1,26 @@
-from datetime import date, datetime, timedelta
-from requests import HTTPError
+from datetime import datetime, date, time, timedelta
 from todoist_api_python.api import TodoistAPI
 from todoist_api_python.models import Task
-from pathlib import Path
-from pymongo import MongoClient
 from typing import Dict, List, Set, Union
-import os, re, json, platform, math
+import os, re, json, platform, math, requests, clipboard_interface, db_interface, cla_utils
 
-# is_mobile = 'Darwin' in platform.platform()
-# if is_mobile:
-# 	import clipboard
-# else:
-# 	import pyperclip
-import pyperclip
+is_mobile = 'macOS' not in platform.platform()
 
 utils = json.load(open('creds_and_info.json'))
 token = utils['todoist_token']
 today = date.today()
-file_dir = os.path.dirname(os.path.realpath(__file__))
+file_dir = utils['file_dir']
 file_name = f"{file_dir}/{today.strftime('%Y%m%d')}.txt"
 api = TodoistAPI(token)
-client = MongoClient(utils['db_url'])
-db = client.todoist_notion_discord
 
-is_connected = False
+is_connected = True
 all_tasks: List[Task] = []
 all_tasks_dict: Dict[str, List[Task]] = {}
 to_del = []
 indent_offsets = {
     'project': 0,
     'section': 1,
-    'task': lambda section_name: 2 if section_name else 1
+    'task': lambda section_name, vc: 0 if vc else (2 if section_name else 1)
 }
 
 
@@ -53,7 +43,7 @@ class MyTask:
             t: Task = api.get_task(id) if api_obj is None else api_obj
             self.name: str = t.content
             self.parent: Union[int, None] = t.parent_id
-            self.due: datetime = try_parsing_datetime(t.due.date)
+            self.due: datetime = cla_utils.get_datetime(t.due.datetime) if t.due.datetime is not None else datetime.combine(cla_utils.get_date(t.due.date), time())
             self.recurring: bool = t.due.is_recurring
             self.is_habit: bool = 'Habit' in t.labels
             self.is_count: bool = 'Count' in t.labels
@@ -87,14 +77,14 @@ class MyTask:
         else:
             return emotes[5 - self.priority] + ': '
     
-    def to_string(self, is_section_named, level=0):
+    def to_string(self, is_section_named: bool, level: int = 0, vc: bool = False):
         self.subtasks.sort(key=lambda x: (int(x.completed), int(x.is_habit), -x.priority, x.due, x.order, int(x.name.split(' ')[-1]) if any(x.name.startswith(y) for y in ['PDF', 'Ex.', 'Es.']) else 0))
         comp = self.is_completed()
         if lls in self.labels or lsp in self.labels or re.match(r'.*(|[0-9]+:)[0-9]{2}:[0-9]{2}.*', self.name):
             self.name = self.name.replace(':', '\\:')
         pb = generate_progress_bar(self.completion()) if comp[1] > 10 else generate_shorter_progress_bar(*comp)
         res = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%) {pb}' if len(self.subtasks) else '')
-        res = [(indent_str * (indent_offsets['task'](is_section_named) + level)) + res, (min(comp[1], 10) if len(self.subtasks) else 0) * (emotes_offset + 1) + len(res) + emotes_offset + ((indent_offsets['task'](is_section_named) + level) * (emotes_offset + len(indent_str))) - (2 * res.count('~1'))]
+        res = [(indent_str * (indent_offsets['task'](is_section_named, vc) + level)) + res, (min(comp[1], 10) if len(self.subtasks) else 0) * (emotes_offset + 1) + len(res) + emotes_offset + ((indent_offsets['task'](is_section_named, vc) + level) * (emotes_offset + len(indent_str))) - (2 * res.count('~1'))]
         if self.num_of_sub_to_print > 0:
             res = [res]
             for st in self.subtasks:
@@ -177,26 +167,30 @@ class Section:
     
     def completion(self, count_mig=False, count_habits=True):
         counts = self.completion_count(count_mig=count_mig, count_habits=count_habits)
-        return counts[0]/counts[1]
-    
-    def to_string(self, completed=False):
-        res = ''
-        if not completed:
-            comp_count = self.completion_count()
-            comp = self.completion()
-            res = f'**SECTION: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}: {comp:.2%}){(" " + generate_progress_bar(comp)) if comp_count[1] > 10 else (" " + generate_shorter_progress_bar(*comp_count)) if comp_count[1] > 1 else ""}'
+        if counts[1] == 0:
+            return 1
         else:
-            res = f'**SECTION: {self.name}**'
-        res = [[(indent_str * indent_offsets['section']) + res, 10 * emotes_offset + len(res) + (indent_offsets['section'] * (emotes_offset + len(indent_str)))]] if self.id else []
+            return counts[0]/counts[1]
+    
+    def to_string(self, completed: bool = False, vc: bool = False):
+        res = []
+        if not vc:
+            if not completed:
+                comp_count = self.completion_count()
+                comp = self.completion()
+                res = f'**SECTION: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}: {comp:.2%}){(" " + generate_progress_bar(comp)) if comp_count[1] > 10 else (" " + generate_shorter_progress_bar(*comp_count)) if comp_count[1] > 1 else ""}'
+            else:
+                res = f'**SECTION: {self.name}**'
+            res = [[(indent_str * indent_offsets['section']) + res, min(comp_count[1], 10) * emotes_offset + len(res) + (indent_offsets['section'] * (emotes_offset + len(indent_str)))]] if self.id else []
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.is_habit), -x.priority, x.due, x.order))
         data = list(filter(lambda t: t.completed == completed, self.tasks))
         for d in data:
             if 'Split' in d.labels and not d.completed and all(s.completed for s in d.subtasks):
                 continue
             if d.num_of_sub_to_print > 0:
-                res.extend(d.to_string(self.id != 0, 0))
+                res.extend(d.to_string(self.id != 0, 0, vc=vc))
             else:
-                res.append(d.to_string(self.id != 0, 0))
+                res.append(d.to_string(self.id != 0, 0, vc=vc))
         return res
     
     def get_uncompleted_tasks(self, count_mig=False, count_habits=True):
@@ -256,9 +250,12 @@ class Project:
     
     def completion(self, count_mig=False, count_habits=True):
         counts = self.completion_count(count_mig=count_mig, count_habits=count_habits)
-        return counts[0]/counts[1]
+        if counts[1] == 0:
+            return 1
+        else:
+            return counts[0]/counts[1]
     
-    def to_string(self, completed=False):
+    def to_string(self, completed: bool = False, vc: bool = False):
         res = ''
         if not completed:
             comp_count = self.completion_count()
@@ -267,9 +264,9 @@ class Project:
         else:
             res = f'**PROJECT: {self.name}**'
         sec = sorted(self.sections.values(), key=lambda x: (x.priority_dict()[1], x.priority_dict()[2], x.priority_dict()[3], x.priority_dict()[4], x.priority_dict()['r']), reverse=True)
-        res = [[res, 10 * emotes_offset + len(res)]]
+        res = [[res, min(comp_count[1], 10) * emotes_offset + len(res)]]
         for s in sec:
-            res.extend(s.to_string(completed=completed))
+            res.extend(s.to_string(completed=completed, vc=vc))
         return res
     
     def get_uncompleted_tasks(self, count_mig=False, count_habits=True):
@@ -324,7 +321,10 @@ class TaskList:
     
     def completion(self, count_mig=False, count_habits=True):
         counts = self.completion_count(count_mig=count_mig, count_habits=count_habits)
-        return counts[0]/counts[1]
+        if counts[1] == 0:
+            return 1
+        else:
+            return counts[0]/counts[1]
     
     def get_uncompleted_tasks(self):
         res = []
@@ -339,24 +339,6 @@ class TaskList:
                 empty.append(p.id)
         for e in empty:
             del self.projects[e]
-
-
-def try_parsing_datetime(text: Union[str, None]) -> datetime:
-    if text is None:
-        return today + timedelta(days=1)
-    if text == datetime.strftime(datetime.now(), '%Y-%m-%d'):
-        text += 'T00:00:00'
-    for fmt in ('%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S'):
-        try:
-            return datetime.strptime(text, fmt)
-        except ValueError:
-            continue
-    return datetime.today() + timedelta(days=1)
-
-
-def simplify_tasks(tasks: List[Task]) -> Dict[str, List[Task]]:
-    tmp = map(lambda x: x.parent_id, tasks)
-    return {x: [y for y in tasks if y.parent_id == x] for x in tmp}
 
 
 def generate_progress_bar(percentage: float) -> str:
@@ -386,6 +368,11 @@ def generate_shorter_progress_bar(done: int, total: int) -> str:
     return res
 
 
+def simplify_tasks(tasks: List[Task]) -> Dict[str, List[Task]]:
+    tmp = map(lambda x: x.parent_id, tasks)
+    return {x: [y for y in tasks if y.parent_id == x] for x in tmp}
+
+
 def get_todoist(to_check: List[str] = [], to_filter: Union[List[str], str, None] = None) -> TaskList:
     tlist = TaskList()
     global all_tasks, all_tasks_dict, to_del
@@ -396,7 +383,7 @@ def get_todoist(to_check: List[str] = [], to_filter: Union[List[str], str, None]
         for task in missing:
             try:
                 all_tasks.append(api.get_task(task))
-            except HTTPError as e:
+            except requests.HTTPError as e:
                 to_del.append(task)
     i = 0
     while i < len(all_tasks) - 1:
@@ -415,17 +402,11 @@ def is_start_of_day() -> bool:
     global is_connected
     if is_connected:
         try:
-            last_update = db.info.find_one({
-                '_id': 'last_update'
-            })
-            return last_update['value'] != date.today().strftime('%Y-%m-%d')
+            return db_interface.get_last_update()
         except Exception:
             is_connected = False
-            if not Path(file_name).is_file():
-                return True
-            else:
-                return not len(open(file_name).read())
-    return is_connected or any(re.match(r'^20[0-9]{6}.txt$', f) and f != f"{today.strftime('%Y%m%d')}.txt" for f in next(os.walk(file_dir))[2])
+            return is_start_of_day()
+    return any(re.match(r'^20[0-9]{6}.txt$', f) and f != f"{today.strftime('%Y%m%d')}.txt" for f in next(os.walk(file_dir))[2])
 
 
 def get_data() -> List[str]:
@@ -434,20 +415,10 @@ def get_data() -> List[str]:
     if is_connected:
         try:
             if is_start_of_day():
-                db.todoist.delete_many({})
-                db.info.update_one({
-                    '_id': 'last_update'
-                    },
-                    {
-                        '$set': {
-                            '_id': 'last_update',
-                            'value': date.today().strftime('%Y-%m-%d')
-                        }
-                    },
-                    upsert=True
-                )
+                db_interface.delete_old_tasks()
+                db_interface.set_last_update()
             else:
-                ids = set(ids + [el['_id'] for el in db.todoist.find({})])
+                ids = db_interface.get_tasks()
         except Exception:
             is_connected = False
     return ids
@@ -458,7 +429,7 @@ def get_file() -> List[str]:
         for f in next(os.walk(file_dir))[2]:
             if re.match(r'^20[0-9]{6}.txt$', f) and f != f"{today.strftime('%Y%m%d')}.txt":
                 os.remove(f)
-        open(file_name, 'w')
+        open(file_name, 'a')
     ids = open(file_name).read()
     if len(ids) > 0:
         return ids.split('\n')
@@ -470,25 +441,12 @@ def update_data(tasks_to_insert, tasks_to_delete):
     global is_connected
     if is_connected:
         try:
-            db.todoist.insert_many([{'_id': el} for el in tasks_to_insert], ordered=False)
+            db_interface.insert_new_tasks(tasks_to_insert)
         except Exception as e:
             pass
         if len(tasks_to_delete):
-            db.todoist.delete_many([{'_id': el} for el in tasks_to_delete])
+            db_interface.delete_old_tasks()
 
 
 def update_file(tlist: TaskList):
     open(file_name, 'w').write('\n'.join(tlist.list_task_ids()))
-
-
-def print_strings(strings):
-    print(f'There are {len(strings)} segments')
-    for i, s in enumerate(strings):
-        # if is_mobile:
-        #     clipboard.set(s)
-        # else:
-        #     pyperclip.copy(s)
-        pyperclip.copy(s)
-        if i < len(strings) - 1:
-            input('Press enter to continue...')
-    print('Finished!')
