@@ -1,61 +1,69 @@
 import requests as r, json
-from typing import List
+from typing import List, Dict, Union
 from datetime import date, datetime
+import backend
 
-utils = json.load(open('creds_and_info.json'))
-
-def get_last_update():
-    resp = r.get(f"{utils['supabase']['url']}/info?key=eq.last_update&select=*",
-        headers={
+def get_last_update() -> bool:
+    resp = r.get(f"{backend.utils['supabase']['url']}/info?key=eq.last_update&select=*",
+        headers = {
             'Content-Type': 'application/json',
-            "apikey": utils['supabase']['secret'],
-            "Authorization": f"Bearer {utils['supabase']['secret']}"
+            "apikey": backend.utils['supabase']['secret'],
+            "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
         })
-    return resp.json()[0]['value'] != date.today().strftime('%Y-%m-%d')
+    backend.is_start_of_day = resp.json()[0]['value'] != date.today().strftime('%Y-%m-%d')
+    return backend.is_start_of_day
 
 def set_last_update():
-    r.patch(f"{utils['supabase']['url']}/info?key=eq.last_update",
-        data=json.dumps({
+    r.patch(f"{backend.utils['supabase']['url']}/info?key=eq.last_update",
+        data = json.dumps({
             'value': datetime.now().strftime("%Y-%m-%d")
         }),
-        headers={
+        headers = {
             'Content-Type': 'application/json',
-            "apikey": utils['supabase']['secret'],
-            "Authorization": f"Bearer {utils['supabase']['secret']}"
+            "apikey": backend.utils['supabase']['secret'],
+            "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
         })
     
 def delete_tasks(to_delete: List[str]):
-    r.delete(f"{utils['supabase']['url']}/tasks?task_id=in.{','.join(to_delete)}",
-        headers={
+    r.delete(f"{backend.utils['supabase']['url']}/tasks?task_id=in.{','.join(to_delete)}",
+        headers = {
             'Content-Type': 'application/json',
-            "apikey": utils['supabase']['secret'],
-            "Authorization": f"Bearer {utils['supabase']['secret']}"
+            "apikey": backend.utils['supabase']['secret'],
+            "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
         })
 
 def delete_old_tasks():
-    r.delete(f"{utils['supabase']['url']}/tasks?task_id=like.*",
-        headers={
+    r.delete(f"{backend.utils['supabase']['url']}/tasks?task_id=like.*",
+        headers = {
             'Content-Type': 'application/json',
-            "apikey": utils['supabase']['secret'],
-            "Authorization": f"Bearer {utils['supabase']['secret']}"
+            "apikey": backend.utils['supabase']['secret'],
+            "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
         })
 
-def insert_new_tasks(tasks: List[str]):
-    r.post(f"{utils['supabase']['url']}/tasks",
-        data=json.dumps([{
-            "task_id": tid
-        } for tid in tasks]),
-        headers={
+def insert_new_tasks():
+    r.post(f"{backend.utils['supabase']['url']}/tasks",
+        data = json.dumps([{
+            "task_id": tid,
+            "parent_id": pid
+        } for tid, pid in backend.imported_task_data.items()]),
+        headers = {
             'Content-Type': 'application/json',
-            "apikey": utils['supabase']['secret'],
-            "Authorization": f"Bearer {utils['supabase']['secret']}"
+            "apikey": backend.utils['supabase']['secret'],
+            "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
         })
 
-def get_tasks():
-    resp = r.get(f"{utils['supabase']['url']}/tasks?select=*",
-        headers={
+def get_tasks() -> Dict[str, Union[str, None]]:
+    resp = r.get(f"{backend.utils['supabase']['url']}/tasks?select=*",
+        headers = {
             'Content-Type': 'application/json',
-            "apikey": utils['supabase']['secret'],
-            "Authorization": f"Bearer {utils['supabase']['secret']}"
+            "apikey": backend.utils['supabase']['secret'],
+            "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
         })
-    return {task['task_id'] for task in resp.json()}
+    return {task['task_id']:task['parent_id'] for task in resp.json()}
+
+def check_connection():
+    if backend.is_connected:
+        try:
+            get_last_update()
+        except Exception:
+            backend.is_connected = False
