@@ -20,12 +20,17 @@ indent_str = ':blank:'
 class MyCompletedTask:
     def __init__(self, tid: str, name: str, parent_id: Union[str, None] = None):
         self.id: str = tid
+        self.name: str = name
         self.is_initial: bool = 'Initial' in name
         self.parent_id: Union[str, None] = parent_id
-        self.subtasks: List[MyCompletedTask] = [MyCompletedTask(el['id'] if el['id'] is not None else '', el['name'] if el['name'] is not None else '', el['parent_id']) for el in backend.completed_tasks_dict[self.id]]
+        self.subtasks: List[MyCompletedTask] = [MyCompletedTask(el['id'] if el['id'] is not None else '', el['name'] if el['name'] is not None else '', el['parent_id']) for el in backend.completed_tasks_dict.get(self.id, list())]
     
     def completion_count(self):
-        return [1, int(self.is_initial)]
+        if len(self.subtasks):
+            data = [s.completion_count() for s in self.subtasks]
+            return [sum(d[0] for d in data), sum(d[1] for d in data)]
+        else:
+            return [1, int(self.is_initial)]
     
     def list_task_ids(self) -> Dict[str, Union[str, None]]:
         res: Dict[str, Union[str, None]] = {}
@@ -173,12 +178,12 @@ class Section:
             comp = comp_count[0] / comp_count[1]
             pb = (" " + generate_progress_bar(comp)) if (comp_count[1] >= 10 or (comp_count[0]/comp_count[1]) > 1) else (" " + generate_shorter_progress_bar(*comp_count)) if comp_count[1] > 1 else ""
             title = f'**SECTION: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}: {comp:.2%}){pb}'
-            res: List[Tuple[str, int]] = [((indent_str * indent_offsets['section']) + title, (pb.count(':') // 2) * emotes_offset + len(title) + (indent_offsets['section'] * (emotes_offset + len(indent_str))))] if self.id != 0 else []
+            res: List[Tuple[str, int]] = [((indent_str * indent_offsets['section']) + title, (pb.count(':') // 2) * emotes_offset + len(title) + (indent_offsets['section'] * (emotes_offset + len(indent_str))))] if self.id != '0' else []
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.is_habit), -x.priority, x.due, x.order))
         for t in self.tasks:
             if t.is_split and not t.completed and all(s.completed for s in t.subtasks):
                 continue
-            res.extend(t.to_string(self.id != 0, 0, vc=vc, chat=chat))
+            res.extend(t.to_string(self.id != '0', 0, vc=vc, chat=chat))
         return res
 
 class Project:
