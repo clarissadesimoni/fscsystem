@@ -88,12 +88,13 @@ def tasklist():
     chat: bool = False
     deadline_chat: datetime = datetime.min
     if backend.is_mobile:
-        publish = cla_utils.safe_input_bool('Do you want to publish your tasklist?')
-        vc = cla_utils.safe_input_bool('Do you want to publish your tasklist to a vc?')
+        publish = cla_utils.safe_input_bool('Do you want to publish your tasklist? ')
+        vc = cla_utils.safe_input_bool('Do you want to publish your tasklist to a vc? ')
         if vc:
             deadline_vc = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the vc deadline: '))
-        chat = cla_utils.safe_input_bool('Do you want to publish your tasklist to a chat?')
-        if chat: deadline_chat = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the vc deadline: '))
+        chat = cla_utils.safe_input_bool('Do you want to publish your tasklist to a chat? ')
+        if chat:
+            deadline_chat = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the vc deadline: '))
     else:
         publish = 'publish' in sys.argv
         vc = 'vc' in sys.argv

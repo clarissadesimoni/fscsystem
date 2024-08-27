@@ -298,7 +298,7 @@ def simplify_completed_tasks(tasks: List[Dict[str, Union[str, None]]]) -> Dict[U
 def retrieve_data():
     backend.tlist = TaskList()
     filter_str = 'today & @Discord'
-    backend.uncompleted_tasks = sorted(api.get_tasks(filter=filter_str))
+    backend.uncompleted_tasks = sorted(api.get_tasks(filter=filter_str), key=lambda x: (x.due.datetime is None, x.due.date if x.due.datetime is None else x.due.datetime))
     backend.uncompleted_tasks_dict = simplify_tasks(backend.uncompleted_tasks)
     completed_response = requests.get('https://api.todoist.com/sync/v9/completed/get_all', headers={"Authorization": f"Bearer {token}"}, params={"since": datetime.combine(date.today(), time()).isoformat(), "limit": 200})
     if completed_response.status_code == 200:

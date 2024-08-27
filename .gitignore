@@ -136,3 +136,4 @@ dmypy.json
 cred*.json
 *.pickle
 launch.json
+.vscode/*

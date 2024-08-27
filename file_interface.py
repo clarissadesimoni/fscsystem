@@ -5,11 +5,14 @@ from datetime import datetime
 from todoist_interface import emotes_offset
 
 def process_start_of_day():
-    check: bool = any(re.match(r'^20[0-9]{6}.txt$', f) and f != backend.file_name for f in next(os.walk(backend.file_dir))[2])
+    check: bool = any(re.match(r'^20[0-9]{6}.txt$', f) and f != backend.file_name.split('/')[-1] for f in next(os.walk(os.getcwd() if backend.is_mobile else backend.file_dir))[2])
     if check:
         for el in filter(lambda f: re.match(r'^20[0-9]{6}.txt$', f) and f != backend.file_name, next(os.walk(backend.file_dir))[2]):
             os.remove(el)
-    open(backend.file_name, 'a')
+    try:
+        open(backend.file_name, 'a')
+    except:
+        open(backend.file_name, 'x')
 
 def retrieve_data() -> Dict[str, Union[str, None]]:
     res: Dict[str,Union[str, None]] = {}
