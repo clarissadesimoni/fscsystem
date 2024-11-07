@@ -1,6 +1,6 @@
 import requests as r, json
 from typing import List, Dict, Union
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import backend
 
 def get_last_update() -> bool:
@@ -10,8 +10,19 @@ def get_last_update() -> bool:
             "apikey": backend.utils['supabase']['secret'],
             "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
         })
-    backend.is_start_of_day = resp.json()[0]['value'] != date.today().strftime('%Y-%m-%d')
+    backend.is_start_of_day = resp.json()[0]['value'] < date.today().strftime('%Y-%m-%d')
     return backend.is_start_of_day
+
+def set_back_last_update():
+    r.patch(f"{backend.utils['supabase']['url']}/info?key=eq.last_update",
+        data = json.dumps({
+            'value': (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        }),
+        headers = {
+            'Content-Type': 'application/json',
+            "apikey": backend.utils['supabase']['secret'],
+            "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
+        })
 
 def set_last_update():
     r.patch(f"{backend.utils['supabase']['url']}/info?key=eq.last_update",
@@ -67,3 +78,8 @@ def check_connection():
             get_last_update()
         except Exception:
             backend.is_connected = False
+
+if __name__ == '__main__':
+    set_back_last_update()
+    # for t in get_tasks():
+    #     pass

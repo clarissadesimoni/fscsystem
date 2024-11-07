@@ -137,3 +137,4 @@ cred*.json
 *.pickle
 launch.json
 .vscode/*
+prova.py

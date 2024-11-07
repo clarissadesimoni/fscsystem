@@ -31,7 +31,7 @@ def get_events() -> List[Tuple[str, int]]:
         ev = open('events.txt').read().split('\n')
     except:
         ev = []
-    ev = list(filter(lambda l: len(l), ev))
+    ev = list(set(filter(lambda l: len(l), ev)))
     res: List[Tuple[str, int]] = []
     for i in range(len(ev)):
         try:
@@ -50,6 +50,10 @@ def get_events() -> List[Tuple[str, int]]:
         except:
             tmp = ':blank::mdot_blossom: ' + str(ev[i]) + ' - All day'
             res.append((tmp, len(tmp) + emotes_offset * 2))
+    res.sort(key=lambda x: x[0].split(' @ ')[1])
     res.insert(0, ('**EVENTS:**', len('**EVENTS:**')))
     res.append(('', 0))
     return res
+
+if __name__ == '__main__':
+    get_events()

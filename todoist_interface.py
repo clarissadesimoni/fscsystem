@@ -3,7 +3,9 @@ from todoist_api_python.api import TodoistAPI
 from todoist_api_python.models import Task
 from typing import List, Dict, Union, Tuple
 import backend, cla_utils
-import math, requests
+import math, requests, re
+from functools import reduce
+
 token = backend.utils['todoist_token']
 api = TodoistAPI(token)
 indent_offsets = {
@@ -17,21 +19,33 @@ emotes_offset = 20
 tab_to_spaces = 4
 indent_str = ':blank:'
 
+is_next_day = False
+
 class MyCompletedTask:
     def __init__(self, tid: str, name: str, parent_id: Union[str, None] = None):
         self.id: str = tid
         self.name: str = name
         self.is_initial: bool = 'Initial' in name
         self.parent_id: Union[str, None] = parent_id
+        self.duration = reduce(lambda a, b: a + b, map(int, filter(lambda label: label.isdigit(), self.name.split(' @')[1:])), 0)
+        if self.duration == 0:
+            self.duration = 60
         self.subtasks: List[MyCompletedTask] = [MyCompletedTask(el['id'] if el['id'] is not None else '', el['name'] if el['name'] is not None else '', el['parent_id']) for el in backend.completed_tasks_dict.get(self.id, list())]
     
-    def completion_count(self):
+    def completion_count(self, count_initial: bool = False):
         if len(self.subtasks):
             data = [s.completion_count() for s in self.subtasks]
             return [sum(d[0] for d in data), sum(d[1] for d in data)]
         else:
-            return [1, int(self.is_initial)]
-    
+            return [1, int(self.is_initial) if not count_initial else 1]
+
+    def completion_count_duration(self, count_initial: bool = False):
+        if len(self.subtasks):
+            data = [s.completion_count_duration() for s in self.subtasks]
+            return [sum(d[0] for d in data), sum(d[1] for d in data)]
+        else:
+            return [self.duration, int(self.is_initial) * self.duration if not count_initial else self.duration]
+
     def list_task_ids(self) -> Dict[str, Union[str, None]]:
         res: Dict[str, Union[str, None]] = {}
         for st in self.subtasks:
@@ -64,6 +78,9 @@ class MyTask:
         self.order: int = t.order
         self.completed_subtasks: List[MyCompletedTask] = [MyCompletedTask(el['id'] if el['id'] is not None else '', el['name'] if el['name'] is not None else '', el['parent_id']) for el in backend.completed_tasks_dict.get(self.id, list())]
         self.subtasks: List[MyTask] = [MyTask.obj_constructor(st) for st in backend.uncompleted_tasks_dict.get(self.id, [])]
+        self.duration = reduce(lambda a, b: a + b, map(int, filter(lambda label: label.isdigit(), t.labels)), 0)
+        if self.duration == 0:
+            self.duration = 60
         self.num_of_sub_to_print: int = len(list(filter(lambda s: not s.is_count, self.subtasks)))
 
     @classmethod
@@ -75,12 +92,19 @@ class MyTask:
     def obj_constructor(cls, t: Task):
         return cls(t)
     
-    def completion_count(self) -> List[int]:
+    def completion_count(self, count_initial: bool = False) -> List[int]:
         if len(self.subtasks) or len(self.completed_subtasks):
-            data = [s.completion_count() for s in self.subtasks] + [s.completion_count() for s in self.completed_subtasks]
+            data = [s.completion_count(count_initial=count_initial) for s in self.subtasks] + [s.completion_count(count_initial=count_initial) for s in self.completed_subtasks]
             return [sum(d[0] for d in data), sum(d[1] for d in data)]
         else:
-            return [int(self.is_split), int(self.is_initial)]
+            return [int(self.is_split), int(self.is_initial) if not count_initial else 1]
+    
+    def completion_count_duration(self, count_initial: bool = False) -> List[int]:
+        if len(self.subtasks):
+            data = [s.completion_count_duration(count_initial=count_initial) for s in self.subtasks] + [s.completion_count_duration(count_initial=count_initial) for s in self.completed_subtasks]
+            return [sum(d[0] for d in data), sum(d[1] for d in data)]
+        else:
+            return [int(self.completed) * self.duration, int(self.is_initial) * self.duration if not count_initial else self.duration]
     
     def bullet(self) -> str:
         emotes = {
@@ -90,7 +114,7 @@ class MyTask:
             4: ':mdot_grey'
         }
         done, total = self.completion_count()
-        if self.completed is True:
+        if self.completed is True or (done >= total and not len(self.subtasks)):
             return ':mdot_greencomp: '
         elif self.is_habit is True:
             return ':mdot_lavenderstart: ' if self.is_started else ':mdot_lavender: '
@@ -103,10 +127,14 @@ class MyTask:
     
     def to_string(self, is_section_named: bool, level: int = 0, vc: bool = False, chat: bool = False) -> List[Tuple[str, int]]:
         self.subtasks.sort(key=lambda x: (int(x.completed), int(x.is_habit), -x.priority, x.due, x.order, int(x.name.split(' ')[-1]) if any(x.name.startswith(y) for y in ['PDF', 'Ex.', 'Es.']) else 0))
-        comp = self.completion_count()
-        completion = comp[0] / comp[1]
-        pb = generate_progress_bar(completion) if (comp[1] >= 10 or (completion) > 1) else generate_shorter_progress_bar(*comp)
-        title = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp[0]/comp[1] * 100:.2f}%) {pb}' if len(self.subtasks) else '')
+        comp = self.completion_count(count_initial=True)
+        comp_dur = self.completion_count_duration(count_initial=True)
+        completion = comp_dur[0] / comp_dur[1]
+        pb = generate_progress_bar(completion) if (comp_dur[1] >= 10 or completion > 1) else generate_shorter_progress_bar(*comp)
+        if (matches := re.findall(r'([0-9][0-9]?:[0-9][0-9]:[0-9][0-9])', self.name)) and len(matches):
+            for m in matches:
+                self.name = self.name.replace(m, m.replace(':', '\\:'))
+        title = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp_dur[0]/comp_dur[1] * 100:.2f}%) {pb}' if len(self.subtasks) or len(self.completed_subtasks) else '')
         res: List[Tuple[str, int]] = [((indent_str * (indent_offsets['task'](is_section_named, (vc or chat)) + level)) + title, ((pb.count(':') // 2) if len(self.subtasks) else 0) * (emotes_offset + 1) + len(title) + emotes_offset + ((indent_offsets['task'](is_section_named, (vc or chat)) + level) * (emotes_offset + len(indent_str))) - (2 * title.count('~1')))]
         if self.num_of_sub_to_print > 0:
             for st in self.subtasks:
@@ -171,12 +199,17 @@ class Section:
         data = [t.completion_count() for t in self.tasks] + [t.completion_count() for t in self.completed_tasks]
         return [sum(d[0] for d in data), sum(d[1] for d in data)]
     
+    def completion_count_duration(self) -> List[int]:
+        data = [t.completion_count_duration() for t in self.tasks] + [t.completion_count_duration() for t in self.completed_tasks]
+        return [sum(d[0] for d in data), sum(d[1] for d in data)]
+    
     def to_string(self, vc: bool = False, chat: bool = False) -> List[Tuple[str, int]]:
         res = []
         if not vc and not chat:
             comp_count = self.completion_count()
+            comp_dur = self.completion_count_duration()
             comp = comp_count[0] / comp_count[1]
-            pb = (" " + generate_progress_bar(comp)) if (comp_count[1] >= 10 or (comp_count[0]/comp_count[1]) > 1) else (" " + generate_shorter_progress_bar(*comp_count)) if comp_count[1] > 1 else ""
+            pb = (" " + generate_progress_bar(comp)) if (comp_dur[1] >= 10 or comp > 1) else (" " + generate_shorter_progress_bar(*comp_dur)) if comp_count[1] > 1 else ""
             title = f'**SECTION: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}: {comp:.2%}){pb}'
             res: List[Tuple[str, int]] = [((indent_str * indent_offsets['section']) + title, (pb.count(':') // 2) * emotes_offset + len(title) + (indent_offsets['section'] * (emotes_offset + len(indent_str))))] if self.id != '0' else []
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.is_habit), -x.priority, x.due, x.order))
@@ -223,12 +256,17 @@ class Project:
         data = [s.completion_count() for s in self.sections.values()]
         return [sum(d[0] for d in data), sum(d[1] for d in data)]
     
+    def completion_count_duration(self) -> List[int]:
+        data = [s.completion_count_duration() for s in self.sections.values()]
+        return [sum(d[0] for d in data), sum(d[1] for d in data)]
+    
     def to_string(self, completed: bool = False, vc: bool = False, chat: bool = False) -> List[Tuple[str, int]]:
         res = ''
         if not completed:
             comp_count = self.completion_count()
+            comp_dur = self.completion_count_duration()
             comp = comp_count[0] / comp_count[1]
-            pb = (" " + generate_progress_bar(comp)) if (comp_count[1] >= 10 or (comp_count[0]/comp_count[1]) > 1) else (" " + generate_shorter_progress_bar(*comp_count)) if comp_count[1] > 1 else ""
+            pb = (" " + generate_progress_bar(comp)) if (comp_dur[1] >= 10 or comp > 1) else (" " + generate_shorter_progress_bar(*comp_dur)) if comp_count[1] > 1 else ""
             res = f'**PROJECT: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}: {comp:.2%}){pb}'
         else:
             res = f'**PROJECT: {self.name}**'
@@ -253,11 +291,15 @@ class TaskList:
     def list_task_ids(self, completed: List[bool] = [False, True]) -> Dict[str, Union[str, None]]:
         res: Dict[str, Union[str, None]] = {}
         for p in self.projects.values():
-            res.update(p.list_task_ids())
+            res.update(p.list_task_ids(completed=completed))
         return res
     
     def completion_count(self) -> List[int]:
         data = [p.completion_count() for p in self.projects.values()]
+        return [sum(d[0] for d in data), sum(d[1] for d in data)]
+    
+    def completion_count_duration(self) -> List[int]:
+        data = [p.completion_count_duration() for p in self.projects.values()]
         return [sum(d[0] for d in data), sum(d[1] for d in data)]
 
 def generate_progress_bar(percentage: float) -> str:
@@ -297,13 +339,25 @@ def simplify_completed_tasks(tasks: List[Dict[str, Union[str, None]]]) -> Dict[U
 
 def retrieve_data():
     backend.tlist = TaskList()
-    filter_str = 'today & @Discord'
+    filter_str = '(due before: +1 day) & @Discord'
     backend.uncompleted_tasks = sorted(api.get_tasks(filter=filter_str), key=lambda x: (x.due.datetime is None, x.due.date if x.due.datetime is None else x.due.datetime))
     backend.uncompleted_tasks_dict = simplify_tasks(backend.uncompleted_tasks)
-    completed_response = requests.get('https://api.todoist.com/sync/v9/completed/get_all', headers={"Authorization": f"Bearer {token}"}, params={"since": datetime.combine(date.today(), time()).isoformat(), "limit": 200})
+    start_date_completed_tasks = date.today() - timedelta(days=1) if is_next_day else date.today()
+    completed_response = requests.get('https://api.todoist.com/sync/v9/completed/get_all', headers={"Authorization": f"Bearer {token}"}, params={"since": datetime.combine(start_date_completed_tasks, time(6, 0)).isoformat(), "limit": 200})
     if completed_response.status_code == 200:
         tmp: List[Dict] = completed_response.json().get('items', [])
-        backend.completed_tasks = list(map(lambda t: dict(id=t['task_id'], name=t['content'], parent_id=backend.imported_task_data.get(t['task_id'], api.get_task(t['task_id']).parent_id), project_id=t['project_id'], section_id=t.get('section_id')), tmp))
+        tmp = list(filter(lambda t: '@Discord' in t['content'], tmp))
+        # tmp = list(filter(lambda t: t['task_id'] in backend.imported_task_data, tmp))
+        missing_parents = set(map(lambda t: t['task_id'], tmp)).difference(set(backend.imported_task_data.keys()))
+        missing_tasks = set(backend.imported_task_data.keys()).difference(set(map(lambda t: t['task_id'], tmp))).difference({t.id for t in backend.uncompleted_tasks})
+        for tid in missing_parents.union(missing_tasks):
+            try:
+                obj: Task = api.get_task(tid)
+                backend.imported_task_data[tid] = obj.parent_id
+                backend.completed_tasks.append(dict(id=obj.id, name=obj.content, parent_id=obj.parent_id, project_id=obj.project_id, section_id=obj.section_id))
+            except:
+                backend.tasks_to_delete.append(tid)
+        backend.completed_tasks += list(map(lambda t: dict(id=t['task_id'], name=t['content'], parent_id=backend.imported_task_data.get(t['task_id']), project_id=t['project_id'], section_id=t.get('section_id')), tmp))
         backend.completed_tasks_dict = simplify_completed_tasks(backend.completed_tasks)
     else:
         print(f"Error retrieving completed tasks: {completed_response.status_code}")
