@@ -19,12 +19,12 @@ def retrieve_data() -> Dict[str, Union[str, None]]:
     process_start_of_day()
     ids = open(backend.file_name).read()
     if len(ids) > 0:
-        res.update({el[0]: (el[1] if len(el[1]) else None) for el in map(lambda x: x.split('-'), ids.split('\n'))})
+        res.update({el[0]: (el[1] if len(el[1]) > 1 else False) for el in map(lambda x: x.split('-'), ids.split('\n'))})
     return res
 
 def insert_data():
     process_start_of_day()
-    open(backend.file_name, 'w').write('\n'.join(['-'.join([x[0], x[1] if x[1] else '']) for x in backend.imported_task_data.items()]))
+    open(backend.file_name, 'w').write('\n'.join(['-'.join([x[0], x[1] if x[1] else 'x']) for x in backend.imported_task_data.items()]))
 
 def get_events() -> List[Tuple[str, int]]:
     try:
@@ -34,18 +34,20 @@ def get_events() -> List[Tuple[str, int]]:
     ev = list(set(filter(lambda l: len(l), ev)))
     res: List[Tuple[str, int]] = []
     for i in range(len(ev)):
+        ev[i], time_strs = ev[i].split(' @ ')
+        time_strs = time_strs.split(' - ')
         try:
-            start = ev[i].split(' @ ')[1].split(' - ')[0]
-            start = cla_utils.get_time(start)
-            if ev[i].split(' - ')[-1] == '...':
-                started = datetime.combine(backend.today, start) <= datetime.now()
+            start = datetime.combine(backend.today, cla_utils.get_time(time_strs[0]))
+            time_strs[0] = f'{time_strs[0]} ({cla_utils.discord_timestamp(start)})'
+            if time_strs[1] == '...':
+                started = start <= datetime.now()
                 completed = False
             else:
-                end = ev[i].split(' - ')[-1]
-                end = cla_utils.get_time(end)
-                completed = datetime.combine(backend.today, end) <= datetime.now()
-                started = datetime.combine(backend.today, start) <= datetime.now() <= datetime.combine(backend.today, end)
-            tmp = ':blank::mdot_darkblue' + ('comp' if completed else 'start' if started else '') + ': ' + str(ev[i])
+                end = datetime.combine(backend.today, cla_utils.get_time(time_strs[1]))
+                time_strs[1] = f'{time_strs[1]} ({cla_utils.discord_timestamp(end)})'
+                completed = end <= datetime.now()
+                started = start <= datetime.now() <= end
+            tmp = ':blank::mdot_darkblue' + ('comp' if completed else 'start' if started else '') + ': ' + ev[i] + ' @ ' + ' - '.join(time_strs)
             res.append((tmp, len(tmp) + emotes_offset * 2))
         except:
             tmp = ':blank::mdot_blossom: ' + str(ev[i]) + ' - All day'

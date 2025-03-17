@@ -100,7 +100,7 @@ class MyTask:
             return [int(self.is_split), int(self.is_initial) if not count_initial else 1]
     
     def completion_count_duration(self, count_initial: bool = False) -> List[int]:
-        if len(self.subtasks):
+        if len(self.subtasks) or len(self.completed_subtasks):
             data = [s.completion_count_duration(count_initial=count_initial) for s in self.subtasks] + [s.completion_count_duration(count_initial=count_initial) for s in self.completed_subtasks]
             return [sum(d[0] for d in data), sum(d[1] for d in data)]
         else:
@@ -113,7 +113,7 @@ class MyTask:
             3: ':mdot_blue',
             4: ':mdot_grey'
         }
-        done, total = self.completion_count()
+        done, total = self.completion_count(count_initial=True)
         if self.completed is True or (done >= total and not len(self.subtasks)):
             return ':mdot_greencomp: '
         elif self.is_habit is True:
@@ -134,7 +134,7 @@ class MyTask:
         if (matches := re.findall(r'([0-9][0-9]?:[0-9][0-9]:[0-9][0-9])', self.name)) and len(matches):
             for m in matches:
                 self.name = self.name.replace(m, m.replace(':', '\\:'))
-        title = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}: {comp_dur[0]/comp_dur[1] * 100:.2f}%) {pb}' if len(self.subtasks) or len(self.completed_subtasks) else '')
+        title = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}, {mins_to_hour_mins(comp_dur[0])}/{mins_to_hour_mins(comp_dur[1])}: {comp_dur[0]/comp_dur[1] * 100:.2f}%) {pb}' if len(self.subtasks) or len(self.completed_subtasks) else f' ({mins_to_hour_mins(comp_dur[1])})')
         res: List[Tuple[str, int]] = [((indent_str * (indent_offsets['task'](is_section_named, (vc or chat)) + level)) + title, ((pb.count(':') // 2) if len(self.subtasks) else 0) * (emotes_offset + 1) + len(title) + emotes_offset + ((indent_offsets['task'](is_section_named, (vc or chat)) + level) * (emotes_offset + len(indent_str))) - (2 * title.count('~1')))]
         if self.num_of_sub_to_print > 0:
             for st in self.subtasks:
@@ -151,7 +151,7 @@ class MyTask:
         if True in completed:
             for st in self.completed_subtasks:
                 res.update(st.list_task_ids())
-        res[self.id] = self.parent_id
+        res[self.id] = self.parent_id if self.parent_id is not None else False
         return res
 
 class Section:
@@ -208,9 +208,9 @@ class Section:
         if not vc and not chat:
             comp_count = self.completion_count()
             comp_dur = self.completion_count_duration()
-            comp = comp_count[0] / comp_count[1]
+            comp = comp_dur[0] / comp_dur[1]
             pb = (" " + generate_progress_bar(comp)) if (comp_dur[1] >= 10 or comp > 1) else (" " + generate_shorter_progress_bar(*comp_dur)) if comp_count[1] > 1 else ""
-            title = f'**SECTION: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}: {comp:.2%}){pb}'
+            title = f'**SECTION: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}, {mins_to_hour_mins(comp_dur[0])}/{mins_to_hour_mins(comp_dur[1])}: {comp:.2%}){pb}'
             res: List[Tuple[str, int]] = [((indent_str * indent_offsets['section']) + title, (pb.count(':') // 2) * emotes_offset + len(title) + (indent_offsets['section'] * (emotes_offset + len(indent_str))))] if self.id != '0' else []
         self.tasks.sort(key=lambda x: (int(x.completed), int(x.is_habit), -x.priority, x.due, x.order))
         for t in self.tasks:
@@ -265,9 +265,9 @@ class Project:
         if not completed:
             comp_count = self.completion_count()
             comp_dur = self.completion_count_duration()
-            comp = comp_count[0] / comp_count[1]
+            comp = comp_dur[0] / comp_dur[1]
             pb = (" " + generate_progress_bar(comp)) if (comp_dur[1] >= 10 or comp > 1) else (" " + generate_shorter_progress_bar(*comp_dur)) if comp_count[1] > 1 else ""
-            res = f'**PROJECT: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}: {comp:.2%}){pb}'
+            res = f'**PROJECT: {self.name}** (Done: {comp_count[0]}/{comp_count[1]}, {mins_to_hour_mins(comp_dur[0])}/{mins_to_hour_mins(comp_dur[1])}: {comp:.2%}){pb}'
         else:
             res = f'**PROJECT: {self.name}**'
         sec = sorted(self.sections.values(), key=lambda x: (x.priority_dict()[1], x.priority_dict()[2], x.priority_dict()[3], x.priority_dict()[4], x.priority_dict()['r']), reverse=True)
@@ -301,6 +301,9 @@ class TaskList:
     def completion_count_duration(self) -> List[int]:
         data = [p.completion_count_duration() for p in self.projects.values()]
         return [sum(d[0] for d in data), sum(d[1] for d in data)]
+
+def mins_to_hour_mins(mins: int) -> str:
+    return f'{mins // 60}h' + (f'{mins % 60}m' if mins % 60 > 0 else '')
 
 def generate_progress_bar(percentage: float) -> str:
     if percentage < 0:
@@ -353,7 +356,7 @@ def retrieve_data():
         for tid in missing_parents.union(missing_tasks):
             try:
                 obj: Task = api.get_task(tid)
-                backend.imported_task_data[tid] = obj.parent_id
+                backend.imported_task_data[tid] = obj.parent_id if isinstance(obj.parent_id, str) and len(obj.parent_id) else False
                 backend.completed_tasks.append(dict(id=obj.id, name=obj.content, parent_id=obj.parent_id, project_id=obj.project_id, section_id=obj.section_id))
             except:
                 backend.tasks_to_delete.append(tid)
@@ -367,5 +370,8 @@ def retrieve_data():
             backend.tlist.add_task(task.project_id, task.section_id if task.section_id else '0', task)
     if None in backend.completed_tasks_dict:
         for task in backend.completed_tasks_dict[None]:
+            backend.tlist.add_task(task['project_id'] if task['project_id'] else '0', task['section_id'] if task['section_id'] else '0', MyCompletedTask(task['id'] if task['id'] else '0', task['name'] if task['name'] else '', task['parent_id']))
+    if False in backend.completed_tasks_dict:
+        for task in backend.completed_tasks_dict[False]:
             backend.tlist.add_task(task['project_id'] if task['project_id'] else '0', task['section_id'] if task['section_id'] else '0', MyCompletedTask(task['id'] if task['id'] else '0', task['name'] if task['name'] else '', task['parent_id']))
     return backend.tlist

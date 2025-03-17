@@ -24,24 +24,24 @@ def create_strings(tlist: todoist_interface.TaskList, vc=False, deadline_vc: dat
     if comp[1] == 0:
         return []
     completion = comp_dur[0] / comp_dur[1]
-    hline_num = 17
+    hline_num = 16
     em = [':mdot_red:', ':mdot_yellowstart:', ':mdot_greencomp:'][min(2, math.floor(completion * 2))]
     body: List[Tuple[str, int]] = []
     if vc:
-        string = f'**TODO LIST** (to finish before {discord_timestamp(deadline_vc)})'
+        string = f'**TODO LIST** (to finish before {cla_utils.discord_timestamp(deadline_vc)})'
         body.append((string, len(string)))
     elif chat:
-        string = f'**TODO LIST** (to finish before {discord_timestamp(deadline_chat)})'
+        string = f'**TODO LIST** (to finish before {cla_utils.discord_timestamp(deadline_chat)})'
         body.append((string, len(string)))
     else:
-        string = (':hline:' * hline_num) + '\n' + f"{em} **{backend.today.strftime('%d/%m/%Y')}** Last update: {re.sub('^(0)', '', datetime.now().strftime('%I:%M %p'))} ({discord_timestamp(datetime.now())}) {em}" + '\n' + (':hline:' * hline_num) + '\n'
+        string = (':hline:' * hline_num) + '\n' + f"{em} **{backend.today.strftime('%d/%m/%Y')}** Last update: {re.sub('^(0)', '', datetime.now().strftime('%I:%M %p'))} ({cla_utils.discord_timestamp(datetime.now())}) {em}" + '\n' + (':hline:' * hline_num) + '\n'
         body.append((string, (hline_num * 2 + 2) * todoist_interface.emotes_offset + len(string)))
         body += file_interface.get_events()
         string = '**TASKS:**'
         body.append((string, len(string)))
     for p in tlist.projects_to_use():
         body.extend(p.to_string(vc=vc, chat=chat))
-    string = f'\nDone: {comp[0]}/{comp[1]}: {completion:.2%} {todoist_interface.generate_progress_bar(completion)}'
+    string = f'\nDone: {comp[0]}/{comp[1]}, {todoist_interface.mins_to_hour_mins(comp_dur[0])}/{todoist_interface.mins_to_hour_mins(comp_dur[1])}: {completion:.2%} {todoist_interface.generate_progress_bar(completion)}'
     body.append((string, len(string) + 10 * todoist_interface.emotes_offset))
     i = 0
     body[i] = (body[i][0], body[i][1] + 10)
