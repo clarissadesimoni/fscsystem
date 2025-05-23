@@ -81,5 +81,3 @@ def check_connection():
 
 if __name__ == '__main__':
     set_back_last_update()
-    # for t in get_tasks():
-    #     pass

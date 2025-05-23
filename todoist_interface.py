@@ -1,7 +1,7 @@
 from datetime import datetime, date, time, timedelta
 from todoist_api_python.api import TodoistAPI
-from todoist_api_python.models import Task
-from typing import List, Dict, Union, Tuple
+from todoist_api_python.models import Task, ApiDue
+from typing import Dict, Iterator, List, Tuple, Union
 import backend, cla_utils
 import math, requests, re
 from functools import reduce
@@ -63,10 +63,7 @@ class MyTask:
         self.due: datetime = datetime.min
         self.recurring: bool = False
         if t.due is not None:
-            if t.due.datetime is not None:
-                self.due = cla_utils.get_datetime(t.due.datetime)
-            else:
-                self.due = datetime.combine(cla_utils.get_date(t.due.date), time())
+            self.due = t.due.date
             self.recurring: bool = t.due.is_recurring
         self.is_habit: bool = 'Habit' in t.labels
         self.is_count: bool = 'Count' in t.labels
@@ -76,9 +73,10 @@ class MyTask:
         self.priority: int = t.priority
         self.completed: bool = t.is_completed == 1 or (self.recurring and self.due.date() > backend.today)
         self.order: int = t.order
-        self.completed_subtasks: List[MyCompletedTask] = [MyCompletedTask(el['id'] if el['id'] is not None else '', el['name'] if el['name'] is not None else '', el['parent_id']) for el in backend.completed_tasks_dict.get(self.id, list())]
+        self.completed_subtasks: List[MyTask] = [MyTask.obj_constructor(st) for st in backend.completed_tasks_dict.get(self.id, [])]
+        # self.completed_subtasks: List[MyCompletedTask] = [MyCompletedTask(el['id'] if el['id'] is not None else '', el['name'] if el['name'] is not None else '', el['parent_id']) for el in backend.completed_tasks_dict.get(self.id, list())]
         self.subtasks: List[MyTask] = [MyTask.obj_constructor(st) for st in backend.uncompleted_tasks_dict.get(self.id, [])]
-        self.duration = reduce(lambda a, b: a + b, map(int, filter(lambda label: label.isdigit(), t.labels)), 0)
+        self.duration = t.duration.amount # reduce(lambda a, b: a + b, map(int, filter(lambda label: label.isdigit(), t.labels)), 0)
         if self.duration == 0:
             self.duration = 60
         self.num_of_sub_to_print: int = len(list(filter(lambda s: not s.is_count, self.subtasks)))
@@ -130,10 +128,13 @@ class MyTask:
         comp = self.completion_count(count_initial=True)
         comp_dur = self.completion_count_duration(count_initial=True)
         completion = comp_dur[0] / comp_dur[1]
-        pb = generate_progress_bar(completion) if (comp_dur[1] >= 10 or completion > 1) else generate_shorter_progress_bar(*comp)
+        pb = generate_progress_bar(completion) if (comp_dur[1] >= 10 or completion > 1) else generate_shorter_progress_bar(*comp_dur)
         if (matches := re.findall(r'([0-9][0-9]?:[0-9][0-9]:[0-9][0-9])', self.name)) and len(matches):
             for m in matches:
                 self.name = self.name.replace(m, m.replace(':', '\\:'))
+        if (matches := re.findall(r'\*', self.name)) and len(matches):
+            for m in matches:
+                self.name = self.name.replace(m, m.replace('*', '\*'))
         title = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}, {mins_to_hour_mins(comp_dur[0])}/{mins_to_hour_mins(comp_dur[1])}: {comp_dur[0]/comp_dur[1] * 100:.2f}%) {pb}' if len(self.subtasks) or len(self.completed_subtasks) else f' ({mins_to_hour_mins(comp_dur[1])})')
         res: List[Tuple[str, int]] = [((indent_str * (indent_offsets['task'](is_section_named, (vc or chat)) + level)) + title, ((pb.count(':') // 2) if len(self.subtasks) else 0) * (emotes_offset + 1) + len(title) + emotes_offset + ((indent_offsets['task'](is_section_named, (vc or chat)) + level) * (emotes_offset + len(indent_str))) - (2 * title.count('~1')))]
         if self.num_of_sub_to_print > 0:
@@ -159,15 +160,16 @@ class Section:
         self.id: str = id
         self.name: str = api.get_section(id).name if id != '0' else 'No section'
         self.tasks: List[MyTask] = []
-        self.completed_tasks: List[MyCompletedTask] = []
+        self.completed_tasks: List[MyTask] = []
     
-    def add_task(self, t: Union[Task, MyCompletedTask, str]):
+    def add_task(self, t: Union[Task, str]):
         if isinstance(t, str):
             self.tasks.append(MyTask.id_constructor(t))
         elif isinstance(t, Task):
-            self.tasks.append(MyTask.obj_constructor(t))
-        elif isinstance(t, MyCompletedTask):
-            self.completed_tasks.append(t)
+            if t.is_completed:
+                self.completed_tasks.append(MyTask.obj_constructor(t))
+            else:
+                self.tasks.append(MyTask.obj_constructor(t))
     
     def priority_dict(self) -> Dict[Union[str, int], int]:
         data = {
@@ -303,7 +305,31 @@ class TaskList:
         return [sum(d[0] for d in data), sum(d[1] for d in data)]
 
 def mins_to_hour_mins(mins: int) -> str:
-    return f'{mins // 60}h' + (f'{mins % 60}m' if mins % 60 > 0 else '')
+    if mins == 0:
+        return '0m'
+    return (f'{mins // 60}h' if mins >= 60 else '') + (f'{mins % 60}m' if mins % 60 > 0 else '')
+
+def parse_api_due(dt: ApiDue) -> datetime:
+    date_str = dt.date
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        pass
+    raise ValueError(f"Unrecognized date format: {date_str}")
 
 def generate_progress_bar(percentage: float) -> str:
     if percentage < 0:
@@ -343,35 +369,32 @@ def simplify_completed_tasks(tasks: List[Dict[str, Union[str, None]]]) -> Dict[U
 def retrieve_data():
     backend.tlist = TaskList()
     filter_str = '(due before: +1 day) & @Discord'
-    backend.uncompleted_tasks = sorted(api.get_tasks(filter=filter_str), key=lambda x: (x.due.datetime is None, x.due.date if x.due.datetime is None else x.due.datetime))
+    tmp_task_list: Iterator[List[Task]] = api.filter_tasks(query=filter_str, limit=200)
+    for page in tmp_task_list:
+        backend.uncompleted_tasks += page
+    backend.uncompleted_tasks = sorted(backend.uncompleted_tasks, key=lambda x: x.due.date)
     backend.uncompleted_tasks_dict = simplify_tasks(backend.uncompleted_tasks)
     start_date_completed_tasks = date.today() - timedelta(days=1) if is_next_day else date.today()
-    completed_response = requests.get('https://api.todoist.com/sync/v9/completed/get_all', headers={"Authorization": f"Bearer {token}"}, params={"since": datetime.combine(start_date_completed_tasks, time(6, 0)).isoformat(), "limit": 200})
-    if completed_response.status_code == 200:
-        tmp: List[Dict] = completed_response.json().get('items', [])
-        tmp = list(filter(lambda t: '@Discord' in t['content'], tmp))
-        # tmp = list(filter(lambda t: t['task_id'] in backend.imported_task_data, tmp))
-        missing_parents = set(map(lambda t: t['task_id'], tmp)).difference(set(backend.imported_task_data.keys()))
-        missing_tasks = set(backend.imported_task_data.keys()).difference(set(map(lambda t: t['task_id'], tmp))).difference({t.id for t in backend.uncompleted_tasks})
-        for tid in missing_parents.union(missing_tasks):
-            try:
-                obj: Task = api.get_task(tid)
-                backend.imported_task_data[tid] = obj.parent_id if isinstance(obj.parent_id, str) and len(obj.parent_id) else False
-                backend.completed_tasks.append(dict(id=obj.id, name=obj.content, parent_id=obj.parent_id, project_id=obj.project_id, section_id=obj.section_id))
-            except:
-                backend.tasks_to_delete.append(tid)
-        backend.completed_tasks += list(map(lambda t: dict(id=t['task_id'], name=t['content'], parent_id=backend.imported_task_data.get(t['task_id']), project_id=t['project_id'], section_id=t.get('section_id')), tmp))
-        backend.completed_tasks_dict = simplify_completed_tasks(backend.completed_tasks)
-    else:
-        print(f"Error retrieving completed tasks: {completed_response.status_code}")
-        print(completed_response.text)
+    tmp_task_list = api.get_completed_tasks_by_due_date(since=datetime.combine(start_date_completed_tasks, time(6, 0)), until=datetime.now(), limit=200)
+    for page in tmp_task_list:
+        backend.completed_tasks += page
+    missing_parents = set(map(lambda t: t.id, backend.completed_tasks)).difference(set(backend.imported_task_data.keys()))
+    missing_tasks = set(backend.imported_task_data.keys()).difference(set(map(lambda t: t.id, backend.completed_tasks))).difference({t.id for t in backend.uncompleted_tasks})
+    for tid in missing_parents.union(missing_tasks):
+        try:
+            obj: Task = api.get_task(tid)
+            backend.imported_task_data[tid] = obj.parent_id if isinstance(obj.parent_id, str) and len(obj.parent_id) else False
+            backend.completed_tasks.append(obj)
+        except:
+            backend.tasks_to_delete.append(tid)
+    backend.completed_tasks_dict = simplify_tasks(backend.completed_tasks)
     if None in backend.uncompleted_tasks_dict:
         for task in backend.uncompleted_tasks_dict[None]:
             backend.tlist.add_task(task.project_id, task.section_id if task.section_id else '0', task)
     if None in backend.completed_tasks_dict:
         for task in backend.completed_tasks_dict[None]:
-            backend.tlist.add_task(task['project_id'] if task['project_id'] else '0', task['section_id'] if task['section_id'] else '0', MyCompletedTask(task['id'] if task['id'] else '0', task['name'] if task['name'] else '', task['parent_id']))
+            backend.tlist.add_task(task.project_id, task.section_id if task.section_id else '0', task)
     if False in backend.completed_tasks_dict:
         for task in backend.completed_tasks_dict[False]:
-            backend.tlist.add_task(task['project_id'] if task['project_id'] else '0', task['section_id'] if task['section_id'] else '0', MyCompletedTask(task['id'] if task['id'] else '0', task['name'] if task['name'] else '', task['parent_id']))
+            backend.tlist.add_task(task.project_id, task.section_id if task.section_id else '0', task)
     return backend.tlist
