@@ -1,3 +1,9 @@
+import os
+
+this_dir = os.path.dirname(__file__)
+if os.getcwd() != this_dir:
+    os.chdir(this_dir)
+
 import backend, db_interface, file_interface, todoist_interface
 from datetime import datetime, date, time
 from typing import List, Tuple
@@ -18,7 +24,13 @@ def retrieve_data() -> todoist_interface.TaskList:
 def discord_timestamp(dt: datetime):
     return f'<t:{int(dt.timestamp())}:t>'
 
-def create_strings(tlist: todoist_interface.TaskList, vc=False, deadline_vc: datetime = datetime.min, chat=False, deadline_chat: datetime = datetime.min) -> List[str]:
+def get_habits() -> List[Tuple[str, int]]:
+    try:
+        return list(map(lambda h: (f':mdot_purple: {h}', todoist_interface.emotes_offset + len(f':mdot_purple: {h}')), open('habits.txt').read().split('\n')))
+    except:
+        return []
+
+def create_strings(tlist: todoist_interface.TaskList, vc=False, deadline_vc: datetime = datetime.min, chat=False, deadline_chat: datetime = datetime.min, habits=False, deadline_habits: datetime = datetime.min) -> List[str]:
     comp = tlist.completion_count()
     comp_dur = tlist.completion_count_duration()
     if comp[1] == 0:
@@ -33,6 +45,13 @@ def create_strings(tlist: todoist_interface.TaskList, vc=False, deadline_vc: dat
     elif chat:
         string = f'**TODO LIST** (to finish before {cla_utils.discord_timestamp(deadline_chat)})'
         body.append((string, len(string)))
+    elif habits:
+        string = "Today's habits:"
+        body.append((string, len(string)))
+        body.extend(get_habits())
+        body.append(('', 0))
+        string = f'**TODO LIST** (to finish before {cla_utils.discord_timestamp(deadline_habits)})'
+        body.append((string, len(string)))
     else:
         string = (':hline:' * hline_num) + '\n' + f"{em} **{backend.today.strftime('%d/%m/%Y')}** Last update: {re.sub('^(0)', '', datetime.now().strftime('%I:%M %p'))} ({cla_utils.discord_timestamp(datetime.now())}) {em}" + '\n' + (':hline:' * hline_num) + '\n'
         body.append((string, (hline_num * 2 + 2) * todoist_interface.emotes_offset + len(string)))
@@ -40,7 +59,7 @@ def create_strings(tlist: todoist_interface.TaskList, vc=False, deadline_vc: dat
         string = '**TASKS:**'
         body.append((string, len(string)))
     for p in tlist.projects_to_use():
-        body.extend(p.to_string(vc=vc, chat=chat))
+        body.extend(p.to_string(vc=vc, chat=chat, habits=habits))
     string = f'\nDone: {comp[0]}/{comp[1]}, {todoist_interface.mins_to_hour_mins(comp_dur[0])}/{todoist_interface.mins_to_hour_mins(comp_dur[1])}: {completion:.2%} {todoist_interface.generate_progress_bar(completion)}'
     body.append((string, len(string) + 10 * todoist_interface.emotes_offset))
     i = 0
@@ -75,7 +94,7 @@ def print_strings(strings):
             input('Press enter to continue...')
     print('Finished!')
 
-def print_data(tlist: todoist_interface.TaskList, publish=True, vc=False, deadline_vc: datetime = datetime.min, chat=False, deadline_chat: datetime = datetime.min):
+def print_data(tlist: todoist_interface.TaskList, publish=True, vc=False, deadline_vc: datetime = datetime.min, chat=False, deadline_chat: datetime = datetime.min, habits=False, deadline_habits: datetime = datetime.min):
     if publish:
         print_strings(create_strings(tlist))
     if vc:
@@ -83,9 +102,13 @@ def print_data(tlist: todoist_interface.TaskList, publish=True, vc=False, deadli
             input('Press enter to continue to vc...')
         print_strings(create_strings(tlist, vc=vc, deadline_vc=deadline_vc))
     if chat:
-        if publish:
+        if publish or vc:
             input('Press enter to continue to chat...')
         print_strings(create_strings(tlist, chat=chat, deadline_chat=deadline_chat))
+    if habits:
+        if publish or vc or chat:
+            input('Press enter to continue to habits...')
+        print_strings(create_strings(tlist, habits=habits, deadline_habits=deadline_habits))
 
 def save_data(tlist: todoist_interface.TaskList):
     backend.imported_task_data = tlist.list_task_ids()
@@ -100,6 +123,8 @@ def tasklist():
     deadline_vc: datetime = datetime.min
     chat: bool = False
     deadline_chat: datetime = datetime.min
+    habits: bool = False
+    deadline_habits: datetime = datetime.min
     if backend.is_mobile:
         publish = cla_utils.safe_input_bool('Do you want to publish your tasklist? ')
         vc = cla_utils.safe_input_bool('Do you want to publish your tasklist to a vc? ')
@@ -109,15 +134,20 @@ def tasklist():
         if chat:
             deadline_chat = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the vc deadline: '))
     else:
-        publish = 'publish' in sys.argv
-        vc = 'vc' in sys.argv
-        if vc:
-            deadline_vc = datetime.combine(backend.today, cla_utils.get_time(sys.argv[sys.argv.index('vc') + 1]))
-        chat = 'chat' in sys.argv
-        if chat:
-            deadline_chat = datetime.combine(backend.today, cla_utils.get_time(sys.argv[sys.argv.index('chat') + 1]))
+        for arg in sys.argv:
+            if arg == '-p':
+                publish = True
+            if re.match(r'-v=[0-2]?[0-9]:[0-5][0-9]', arg):
+                vc = True
+                deadline_vc = datetime.combine(backend.today, cla_utils.get_time(arg.split('=')[1]))
+            if re.match(r'-c=[0-2]?[0-9]:[0-5][0-9]', arg):
+                chat = True
+                deadline_chat = datetime.combine(backend.today, cla_utils.get_time(arg.split('=')[1]))
+            if re.match(r'-h=[0-2]?[0-9]:[0-5][0-9]', arg):
+                habits = True
+                deadline_habits = datetime.combine(backend.today, cla_utils.get_time(arg.split('=')[1]))
     tlist: todoist_interface.TaskList = retrieve_data()
-    print_data(tlist, publish, vc, deadline_vc, chat, deadline_chat)
+    print_data(tlist, publish, vc, deadline_vc, chat, deadline_chat, habits, deadline_habits)
     save_data(tlist)
 
 if __name__ == "__main__":

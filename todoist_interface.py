@@ -95,7 +95,7 @@ class MyTask:
             data = [s.completion_count(count_initial=count_initial) for s in self.subtasks] + [s.completion_count(count_initial=count_initial) for s in self.completed_subtasks]
             return [sum(d[0] for d in data), sum(d[1] for d in data)]
         else:
-            return [int(self.is_split), int(self.is_initial) if not count_initial else 1]
+            return [int(self.is_split or self.completed), int(self.is_initial) if not count_initial else 1]
     
     def completion_count_duration(self, count_initial: bool = False) -> List[int]:
         if len(self.subtasks) or len(self.completed_subtasks):
@@ -123,7 +123,7 @@ class MyTask:
         else:
             return emotes[5 - self.priority] + ': '
     
-    def to_string(self, is_section_named: bool, level: int = 0, vc: bool = False, chat: bool = False) -> List[Tuple[str, int]]:
+    def to_string(self, is_section_named: bool, level: int = 0, vc: bool = False, chat: bool = False, habits: bool = False) -> List[Tuple[str, int]]:
         self.subtasks.sort(key=lambda x: (int(x.completed), int(x.is_habit), -x.priority, x.due, x.order, int(x.name.split(' ')[-1]) if any(x.name.startswith(y) for y in ['PDF', 'Ex.', 'Es.']) else 0))
         comp = self.completion_count(count_initial=True)
         comp_dur = self.completion_count_duration(count_initial=True)
@@ -136,7 +136,7 @@ class MyTask:
             for m in matches:
                 self.name = self.name.replace(m, m.replace('*', '\*'))
         title = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}, {mins_to_hour_mins(comp_dur[0])}/{mins_to_hour_mins(comp_dur[1])}: {comp_dur[0]/comp_dur[1] * 100:.2f}%) {pb}' if len(self.subtasks) or len(self.completed_subtasks) else f' ({mins_to_hour_mins(comp_dur[1])})')
-        res: List[Tuple[str, int]] = [((indent_str * (indent_offsets['task'](is_section_named, (vc or chat)) + level)) + title, ((pb.count(':') // 2) if len(self.subtasks) else 0) * (emotes_offset + 1) + len(title) + emotes_offset + ((indent_offsets['task'](is_section_named, (vc or chat)) + level) * (emotes_offset + len(indent_str))) - (2 * title.count('~1')))]
+        res: List[Tuple[str, int]] = [((indent_str * (indent_offsets['task'](is_section_named, (vc or chat or habits)) + level)) + title, ((pb.count(':') // 2) if len(self.subtasks) else 0) * (emotes_offset + 1) + len(title) + emotes_offset + ((indent_offsets['task'](is_section_named, (vc or chat or habits)) + level) * (emotes_offset + len(indent_str))) - (2 * title.count('~1')))]
         if self.num_of_sub_to_print > 0:
             for st in self.subtasks:
                 if st.is_count:
@@ -205,9 +205,9 @@ class Section:
         data = [t.completion_count_duration() for t in self.tasks] + [t.completion_count_duration() for t in self.completed_tasks]
         return [sum(d[0] for d in data), sum(d[1] for d in data)]
     
-    def to_string(self, vc: bool = False, chat: bool = False) -> List[Tuple[str, int]]:
+    def to_string(self, vc: bool = False, chat: bool = False, habits: bool = False) -> List[Tuple[str, int]]:
         res = []
-        if not vc and not chat:
+        if not vc and not chat and not habits:
             comp_count = self.completion_count()
             comp_dur = self.completion_count_duration()
             comp = comp_dur[0] / comp_dur[1]
@@ -218,7 +218,7 @@ class Section:
         for t in self.tasks:
             if t.is_split and not t.completed and all(s.completed for s in t.subtasks):
                 continue
-            res.extend(t.to_string(self.id != '0', 0, vc=vc, chat=chat))
+            res.extend(t.to_string(self.id != '0', 0, vc=vc, chat=chat, habits=habits))
         return res
 
 class Project:
@@ -262,7 +262,7 @@ class Project:
         data = [s.completion_count_duration() for s in self.sections.values()]
         return [sum(d[0] for d in data), sum(d[1] for d in data)]
     
-    def to_string(self, completed: bool = False, vc: bool = False, chat: bool = False) -> List[Tuple[str, int]]:
+    def to_string(self, completed: bool = False, vc: bool = False, chat: bool = False, habits: bool = False) -> List[Tuple[str, int]]:
         res = ''
         if not completed:
             comp_count = self.completion_count()
@@ -275,7 +275,7 @@ class Project:
         sec = sorted(self.sections.values(), key=lambda x: (x.priority_dict()[1], x.priority_dict()[2], x.priority_dict()[3], x.priority_dict()[4], x.priority_dict()['r']), reverse=True)
         res = [(res, (pb.count(':') // 2) * emotes_offset + len(res))]
         for s in sec:
-            res.extend(s.to_string(vc=vc, chat=chat))
+            res.extend(s.to_string(vc=vc, chat=chat, habits=habits))
         return res
 
 class TaskList:
