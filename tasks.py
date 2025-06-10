@@ -10,7 +10,7 @@ from typing import List, Tuple
 import math, re, sys
 import cla_utils
 
-def retrieve_data() -> todoist_interface.TaskList:
+def retrieve_data(only_new: bool = False) -> todoist_interface.TaskList:
     db_interface.check_connection()
     backend.imported_task_data = file_interface.retrieve_data()
     if backend.is_connected:
@@ -19,7 +19,7 @@ def retrieve_data() -> todoist_interface.TaskList:
             db_interface.set_last_update()
         else:
             backend.imported_task_data.update(db_interface.get_tasks())
-    return todoist_interface.retrieve_data()
+    return todoist_interface.retrieve_data(only_new=only_new)
 
 def discord_timestamp(dt: datetime):
     return f'<t:{int(dt.timestamp())}:t>'
@@ -118,6 +118,7 @@ def save_data(tlist: todoist_interface.TaskList):
         db_interface.insert_new_tasks()
 
 def tasklist():
+    only_new : bool = False
     publish: bool = False
     vc: bool = False
     deadline_vc: datetime = datetime.min
@@ -132,7 +133,11 @@ def tasklist():
             deadline_vc = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the vc deadline: '))
         chat = cla_utils.safe_input_bool('Do you want to publish your tasklist to a chat? ')
         if chat:
-            deadline_chat = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the vc deadline: '))
+            deadline_chat = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the chat deadline: '))
+        habits = cla_utils.safe_input_bool('Do you want add habits? ')
+        if habits:
+            deadline_habits = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the habits deadline: '))
+        only_new = cla_utils.safe_input_bool('Do you only want to insert new tasks?')
     else:
         for arg in sys.argv:
             if arg == '-p':
@@ -146,7 +151,9 @@ def tasklist():
             if re.match(r'-h=[0-2]?[0-9]:[0-5][0-9]', arg):
                 habits = True
                 deadline_habits = datetime.combine(backend.today, cla_utils.get_time(arg.split('=')[1]))
-    tlist: todoist_interface.TaskList = retrieve_data()
+            if arg == '-n':
+                only_new = True
+    tlist: todoist_interface.TaskList = retrieve_data(only_new=only_new)
     print_data(tlist, publish, vc, deadline_vc, chat, deadline_chat, habits, deadline_habits)
     save_data(tlist)
 

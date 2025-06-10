@@ -141,7 +141,7 @@ class MyTask:
             for st in self.subtasks:
                 if st.is_count:
                     continue
-                res.extend(st.to_string(is_section_named, level + 1))
+                res.extend(st.to_string(is_section_named, level + 1, vc=vc, chat=chat, habits=habits))
         return res
     
     def list_task_ids(self, completed: List[bool] = [False, True]) -> Dict[str, Union[str, None]]:
@@ -366,25 +366,33 @@ def simplify_completed_tasks(tasks: List[Dict[str, Union[str, None]]]) -> Dict[U
     tmp = map(lambda x: x['parent_id'], tasks)
     return {x: [y for y in tasks if y['parent_id'] == x] for x in tmp}
 
-def retrieve_data():
+def retrieve_data(only_new: bool = False):
     backend.tlist = TaskList()
     filter_str = '(due before: +1 day) & @Discord'
     tmp_task_list: Iterator[List[Task]] = api.filter_tasks(query=filter_str, limit=200)
-    for page in tmp_task_list:
+    for page in iter(tmp_task_list):
         backend.uncompleted_tasks += page
     backend.uncompleted_tasks = sorted(backend.uncompleted_tasks, key=lambda x: x.due.date)
     backend.uncompleted_tasks_dict = simplify_tasks(backend.uncompleted_tasks)
     start_date_completed_tasks = date.today() - timedelta(days=1) if is_next_day else date.today()
-    tmp_task_list = api.get_completed_tasks_by_due_date(since=datetime.combine(start_date_completed_tasks, time(6, 0)), until=datetime.now(), limit=200)
-    for page in tmp_task_list:
+    tmp_task_list = api.get_completed_tasks_by_due_date(since=datetime.combine(start_date_completed_tasks, time(6, 0)), until=datetime.now(), filter_query='@Discord', limit=200)
+    for page in iter(tmp_task_list):
         backend.completed_tasks += page
     missing_parents = set(map(lambda t: t.id, backend.completed_tasks)).difference(set(backend.imported_task_data.keys()))
-    missing_tasks = set(backend.imported_task_data.keys()).difference(set(map(lambda t: t.id, backend.completed_tasks))).difference({t.id for t in backend.uncompleted_tasks})
+    missing_tasks = set(backend.imported_task_data.keys()).difference({t.id for t in backend.completed_tasks}).difference({t.id for t in backend.uncompleted_tasks})
     for tid in missing_parents.union(missing_tasks):
+        if only_new:
+            break
         try:
             obj: Task = api.get_task(tid)
+            if 'Discord' not in obj.labels:
+                backend.tasks_to_delete.append(tid)
+                continue
             backend.imported_task_data[tid] = obj.parent_id if isinstance(obj.parent_id, str) and len(obj.parent_id) else False
-            backend.completed_tasks.append(obj)
+            if obj.is_completed:
+                backend.completed_tasks.append(obj)
+            else:
+                backend.uncompleted_tasks_dict[obj.parent_id].append(obj)
         except:
             backend.tasks_to_delete.append(tid)
     backend.completed_tasks_dict = simplify_tasks(backend.completed_tasks)
