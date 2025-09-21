@@ -137,7 +137,7 @@ def tasklist():
         habits = cla_utils.safe_input_bool('Do you want add habits? ')
         if habits:
             deadline_habits = datetime.combine(backend.today, cla_utils.safe_input_time('Insert the habits deadline: '))
-        only_new = cla_utils.safe_input_bool('Do you only want to insert new tasks?')
+        only_new = cla_utils.safe_input_bool('Do you only want to insert new tasks? ')
     else:
         for arg in sys.argv:
             if arg == '-p':
