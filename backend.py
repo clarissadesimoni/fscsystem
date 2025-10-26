@@ -3,13 +3,15 @@ from typing import List, Dict, Union
 from datetime import date
 import json, platform, os
 
-is_mobile = 'macOS' not in platform.platform()
+is_mac = platform.platform().startswith('macOS')
+is_windows = platform.platform().startswith('Windows')
+is_mobile = not (is_mac or is_windows)
 is_connected = True
 is_start_of_day = True
 tlist = None
 today = date.today()
 utils = json.load(open('creds_and_info.json'))
-file_dir: str = os.getcwd() if is_mobile else utils['desktop_file_dir']
+file_dir: str = utils['desktop_file_dir'] if is_mac else os.getcwd()
 file_name = f"{file_dir}/{today.strftime('%Y%m%d')}.txt"
 imported_task_data: Dict[str, Union[str, None]] = {}
 uncompleted_tasks: List[Task] = []

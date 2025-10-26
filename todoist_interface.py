@@ -132,9 +132,7 @@ class MyTask:
         if (matches := re.findall(r'([0-9][0-9]?:[0-9][0-9]:[0-9][0-9])', self.name)) and len(matches):
             for m in matches:
                 self.name = self.name.replace(m, m.replace(':', '\\:'))
-        if (matches := re.findall(r'\*', self.name)) and len(matches):
-            for m in matches:
-                self.name = self.name.replace(m, m.replace('*', '\*'))
+        self.name = self.name.replace('*', r'\*')
         title = f'{self.bullet()}{self.name}' + (f' (Done: {comp[0]}/{comp[1]}, {mins_to_hour_mins(comp_dur[0])}/{mins_to_hour_mins(comp_dur[1])}: {comp_dur[0]/comp_dur[1] * 100:.2f}%) {pb}' if len(self.subtasks) or len(self.completed_subtasks) else f' ({mins_to_hour_mins(comp_dur[1])})')
         res: List[Tuple[str, int]] = [((indent_str * (indent_offsets['task'](is_section_named, (vc or chat or habits)) + level)) + title, ((pb.count(':') // 2) if len(self.subtasks) else 0) * (emotes_offset + 1) + len(title) + emotes_offset + ((indent_offsets['task'](is_section_named, (vc or chat or habits)) + level) * (emotes_offset + len(indent_str))) - (2 * title.count('~1')))]
         if self.num_of_sub_to_print > 0:
