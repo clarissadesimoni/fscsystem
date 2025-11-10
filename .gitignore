@@ -134,6 +134,7 @@ dmypy.json
 #custom files to ignore
 *.txt
 cred*.json
+token.json
 *.pickle
 launch.json
 .vscode/*

@@ -3,6 +3,7 @@ import re, os
 import backend, cla_utils
 from datetime import datetime
 from todoist_interface import emotes_offset
+import google_interface
 
 def process_start_of_day():
     check: bool = any(re.match(r'^20[0-9]{6}.txt$', f) and f != backend.file_name.split('/')[-1] for f in next(os.walk(os.getcwd() if backend.is_mobile else backend.file_dir))[2])
@@ -27,8 +28,10 @@ def insert_data():
     open(backend.file_name, 'w').write('\n'.join(['-'.join([x[0], x[1] if x[1] else 'x']) for x in backend.imported_task_data.items()]))
 
 def get_events() -> List[Tuple[str, int]]:
+    if backend.is_windows:
+        google_interface.main()
     try:
-        ev = open('events.txt').read().split('\n')
+        ev = open(os.path.join(backend.file_dir, 'events.txt')).read().split('\n')
     except:
         ev = []
     ev = list(set(filter(lambda l: len(l), ev)))
