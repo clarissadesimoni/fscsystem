@@ -142,16 +142,16 @@ def tasklist():
         for arg in sys.argv:
             if arg == '-p':
                 publish = True
-            if re.match(r'-v=[0-2]?[0-9]:[0-5][0-9]', arg):
+            elif re.match(r'-v=[0-2]?[0-9]:[0-5][0-9]', arg):
                 vc = True
                 deadline_vc = datetime.combine(backend.today, cla_utils.get_time(arg.split('=')[1]))
-            if re.match(r'-c=[0-2]?[0-9]:[0-5][0-9]', arg):
+            elif re.match(r'-c=[0-2]?[0-9]:[0-5][0-9]', arg):
                 chat = True
                 deadline_chat = datetime.combine(backend.today, cla_utils.get_time(arg.split('=')[1]))
-            if re.match(r'-h=[0-2]?[0-9]:[0-5][0-9]', arg):
+            elif re.match(r'-h=[0-2]?[0-9]:[0-5][0-9]', arg):
                 habits = True
                 deadline_habits = datetime.combine(backend.today, cla_utils.get_time(arg.split('=')[1]))
-            if arg == '-n':
+            elif arg == '-n':
                 only_new = True
     tlist: todoist_interface.TaskList = retrieve_data(only_new=only_new)
     print_data(tlist, publish, vc, deadline_vc, chat, deadline_chat, habits, deadline_habits)
