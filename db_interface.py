@@ -59,9 +59,11 @@ def insert_new_tasks():
         } for tid, pid in backend.imported_task_data.items()]),
         headers = {
             'Content-Type': 'application/json',
+            "Prefer": "resolution=merge-duplicates",
             "apikey": backend.utils['supabase']['secret'],
             "Authorization": f"Bearer {backend.utils['supabase']['secret']}"
-        })
+        },
+        params={"on_conflict": "task_id"})
 
 def get_tasks() -> Dict[str, Union[str, None]]:
     resp = r.get(f"{backend.utils['supabase']['url']}/tasks?select=*",
