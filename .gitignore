@@ -138,4 +138,4 @@ token.json
 *.pickle
 launch.json
 .vscode/*
-prova.py
+prova*.py

@@ -5,7 +5,8 @@ import json, platform, os, pathlib
 
 is_mac = platform.platform().startswith('macOS')
 is_windows = platform.platform().startswith('Windows')
-is_mobile = not (is_mac or is_windows)
+is_desktop = is_mac or is_windows
+is_mobile = not is_desktop
 is_connected = True
 is_start_of_day = True
 tlist = None
