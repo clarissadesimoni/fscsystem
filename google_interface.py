@@ -19,8 +19,8 @@ cals_to_avoid: List[str] = [
     'University study',
     'Skeleton',
     'Personal',
-    'primary',
-    'clarissa.de.simoni@gmail.com',
+    # 'primary',
+    # 'clarissa.de.simoni@gmail.com',
     'Random',
     'Exams',
     'Workouts',
@@ -90,7 +90,7 @@ def main():
                 .execute()
             )
             events = events_result.get("items", [])
-            events = '\n'.join(map(lambda e: format_line(e, cal_id), events))
+            events = '\n'.join(map(lambda e: format_line(e, cal_id), filter(lambda f: '_BLOCK-' not in f['summary'], events)))
             if len(events):
                 events_strs.append(events)
         
