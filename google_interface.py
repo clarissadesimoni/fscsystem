@@ -1,6 +1,7 @@
 from datetime import datetime, date, time
 import os.path, pytz, backend
 from typing import Dict, List, Union
+from device_paths import fsc_dir, syncthing_dir
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -43,22 +44,23 @@ def format_line(event: Dict[str, Union[str, Dict]], cal_id: str) -> str:
 
 def get_access():
     creds = None
+    token_fn = os.path.join(fsc_dir, "token.json")
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
-    if os.path.exists(os.path.join(backend.file_dir, "token.json")):
-        creds = Credentials.from_authorized_user_file(os.path.join(backend.file_dir, "token.json"), SCOPES)
+    if os.path.exists(token_fn):
+        creds = Credentials.from_authorized_user_file(token_fn, SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                os.path.join(backend.file_dir, "credentials.json"), SCOPES
+                os.path.join(syncthing_dir, "credentials.json"), SCOPES
             )
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
-        with open(os.path.join(backend.file_dir, "token.json"), "w") as token:
+        with open(token_fn, "w") as token:
             token.write(creds.to_json())
     return creds
 
@@ -94,7 +96,7 @@ def main():
             if len(events):
                 events_strs.append(events)
         
-            with open(os.path.join(backend.file_dir, 'events.txt'), 'w') as f:
+            with open(os.path.join(fsc_dir, 'events.txt'), 'w') as f:
                 f.write('\n'.join(events_strs))
 
     except HttpError as error:

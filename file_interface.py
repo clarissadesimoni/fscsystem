@@ -1,13 +1,14 @@
 from typing import Dict, Union, List, Tuple
-import re, os
+import re, os, pathlib
 import backend, cla_utils
 from datetime import datetime
 from todoist_interface import emotes_offset
+from device_paths import files_dir, fsc_dir
 
 def process_start_of_day():
-    check: bool = any(re.match(r'^20[0-9]{6}.txt$', f) and f != backend.file_name.split('/')[-1] for f in next(os.walk(os.getcwd() if backend.is_mobile else backend.file_dir))[2])
+    check: bool = any(re.match(r'^20[0-9]{6}.txt$', f) and f != pathlib.Path(backend.file_name).name for f in next(os.walk(files_dir))[2])
     if check:
-        for el in filter(lambda f: re.match(r'^20[0-9]{6}.txt$', f) and f != backend.file_name, next(os.walk(backend.file_dir))[2]):
+        for el in filter(lambda f: re.match(r'^20[0-9]{6}.txt$', f) and f != backend.file_name, next(os.walk(files_dir))[2]):
             os.remove(el)
     try:
         open(backend.file_name, 'a')
@@ -31,7 +32,7 @@ def get_events() -> List[Tuple[str, int]]:
         import google_interface
         google_interface.main()
     try:
-        ev = open(os.path.join(backend.file_dir, 'events.txt')).read().split('\n')
+        ev = open(os.path.join(fsc_dir, 'events.txt')).read().split('\n')
     except:
         ev = []
     ev = list(set(filter(lambda l: len(l), ev)))
