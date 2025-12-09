@@ -1,7 +1,7 @@
 from todoist_api_python.models import Task
 from typing import List, Dict, Union
 from datetime import date
-import json, platform, os, pathlib
+import json, platform, os
 from device_paths import files_dir, fsc_dir
 
 is_mac = platform.platform().startswith('macOS')

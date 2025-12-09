@@ -1,4 +1,5 @@
 import os
+from device_paths import files_dir
 
 this_dir = os.path.dirname(__file__)
 if os.getcwd() != this_dir:
@@ -26,7 +27,7 @@ def discord_timestamp(dt: datetime):
 
 def get_habits() -> List[Tuple[str, int]]:
     try:
-        return list(map(lambda h: (f':mdot_purple: {h}', todoist_interface.emotes_offset + len(f':mdot_purple: {h}')), open(os.path.join(backend.file_dir, 'habits.txt')).read().split('\n')))
+        return list(map(lambda h: (f':mdot_purple: {h}', todoist_interface.emotes_offset + len(f':mdot_purple: {h}')), open(os.path.join(files_dir, 'habits.txt')).read().split('\n')))
     except:
         return []
 

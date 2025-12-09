@@ -9,7 +9,7 @@ def process_start_of_day():
     check: bool = any(re.match(r'^20[0-9]{6}.txt$', f) and f != pathlib.Path(backend.file_name).name for f in next(os.walk(files_dir))[2])
     if check:
         for el in filter(lambda f: re.match(r'^20[0-9]{6}.txt$', f) and f != backend.file_name, next(os.walk(files_dir))[2]):
-            os.remove(el)
+            os.remove(os.path.join(files_dir, el))
     try:
         open(backend.file_name, 'a')
     except:
