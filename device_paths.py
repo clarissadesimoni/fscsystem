@@ -12,9 +12,13 @@ if is_mac:
     fsc_dir = os.path.join(base_dir, 'fscsystem')
     syncthing_dir = os.path.join(desktop_dir, 'syncthing_dir')
 elif is_windows:
-    desktop_dir = os.path.join(pathlib.Path.home(), 'OneDrive' + (' - Fuji Seal Group' if is_work else ''), 'Desktop')
+    if is_work:
+        desktop_dir = os.path.join(pathlib.Path.home(), 'OneDrive - Fuji Seal Group', 'Documenti', 'Personal')
+        syncthing_dir = os.path.join(desktop_dir, 'syncthing_dir')
+    else:
+        desktop_dir = os.path.join(pathlib.Path.home(), 'OneDrive', 'Desktop')
+        syncthing_dir = os.path.join(desktop_dir, 'syncthing', 'syncthing_dir')
     fsc_dir = os.path.join(desktop_dir, 'fscsystem')
-    syncthing_dir = os.path.join(desktop_dir, 'syncthing', 'syncthing_dir')
 elif is_mobile:
     base_dir = pathlib.Path(os.getcwd()).parent
     fsc_dir = os.path.join(base_dir, 'fscsystem')

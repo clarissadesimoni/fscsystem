@@ -139,3 +139,4 @@ token.json
 launch.json
 .vscode/*
 prova*.py
+.stfolder/*
