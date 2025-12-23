@@ -1,7 +1,7 @@
-from datetime import datetime, date, time
-import os.path, pytz, backend
+from datetime import datetime, date, time, timedelta
+import os.path, pytz
 from typing import Dict, List, Union
-from device_paths import fsc_dir, syncthing_dir
+from device_paths import fsc_dir, syncthing_dir, creds_dir, token_fn
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -37,14 +37,18 @@ cals_to_avoid: List[str] = [
 def format_line(event: Dict[str, Union[str, Dict]], cal_id: str) -> str:
     name = event['summary']
     cal = cal_ids[cal_id]
-    fmt = '%Y-%m-%dT%H:%M:%S%z'
-    dt_start = datetime.strptime(event['start']['dateTime'], fmt)
-    dt_end = datetime.strptime(event['end']['dateTime'], fmt)
-    return f"{name} ({cal}) @ {dt_start.strftime('%H:%M')} - {dt_end.strftime('%H:%M')}"
+    fmt_d = '%Y-%m-%d'
+    fmt_dt = '%Y-%m-%dT%H:%M:%S%z'
+    dt_start = datetime.strptime(event['start']['dateTime'], fmt_dt) if 'dateTime' in event['start'] else datetime.strptime(event['start']['date'], fmt_d)
+    dt_end = datetime.strptime(event['end']['dateTime'], fmt_dt) if 'dateTime' in event['end'] else datetime.strptime(event['end']['date'], fmt_d) - timedelta(days=1)
+    if 'dateTime' in event['start']:
+        res = f"{name} ({cal}) @ {dt_start.strftime('%H:%M')} - {dt_end.strftime('%H:%M')}"
+    else:
+        res = f"{name} ({cal}) @ All-day from {dt_start.strftime('%Y-%m-%d')} to {dt_end.strftime('%Y-%m-%d')}"
+    return res
 
 def get_access():
     creds = None
-    token_fn = os.path.join(fsc_dir, "token.json")
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
     # time.
@@ -56,7 +60,7 @@ def get_access():
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                os.path.join(syncthing_dir, "credentials.json"), SCOPES
+                os.path.join(creds_dir, "credentials.json"), SCOPES
             )
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run

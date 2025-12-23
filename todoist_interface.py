@@ -2,8 +2,8 @@ from datetime import datetime, date, time, timedelta
 from todoist_api_python.api import TodoistAPI
 from todoist_api_python.models import Task, ApiDue
 from typing import Dict, Iterator, List, Tuple, Union
-import backend, cla_utils
-import math, requests, re
+import backend
+import math, re
 from functools import reduce
 
 token = backend.utils['todoist_token']

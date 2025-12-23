@@ -39,24 +39,28 @@ def get_events() -> List[Tuple[str, int]]:
     res: List[Tuple[str, int]] = []
     for i in range(len(ev)):
         ev[i], time_strs = ev[i].split(' @ ')
-        time_strs = time_strs.split(' - ')
-        try:
-            start = datetime.combine(backend.today, cla_utils.get_time(time_strs[0]))
-            time_strs[0] = f'{time_strs[0]} ({cla_utils.discord_timestamp(start)})'
-            if time_strs[1] == '...':
-                started = start <= datetime.now()
-                completed = False
-            else:
-                end = datetime.combine(backend.today, cla_utils.get_time(time_strs[1]))
-                time_strs[1] = f'{time_strs[1]} ({cla_utils.discord_timestamp(end)})'
-                completed = end <= datetime.now()
-                started = start <= datetime.now() <= end
-            tmp = ':blank::mdot_darkblue' + ('comp' if completed else 'start' if started else '') + ': ' + ev[i] + ' @ ' + ' - '.join(time_strs)
+        if ':' in time_strs:
+            time_strs = time_strs.split(' - ')
+            try:
+                start = datetime.combine(backend.today, cla_utils.get_time(time_strs[0]))
+                time_strs[0] = f'{time_strs[0]} ({cla_utils.discord_timestamp(start)})'
+                if time_strs[1] == '...':
+                    started = start <= datetime.now()
+                    completed = False
+                else:
+                    end = datetime.combine(backend.today, cla_utils.get_time(time_strs[1]))
+                    time_strs[1] = f'{time_strs[1]} ({cla_utils.discord_timestamp(end)})'
+                    completed = end <= datetime.now()
+                    started = start <= datetime.now() <= end
+                tmp = ':blank::mdot_darkblue' + ('comp' if completed else 'start' if started else '') + ': ' + ev[i] + ' @ ' + ' - '.join(time_strs)
+                res.append((tmp, len(tmp) + emotes_offset * 2))
+            except:
+                tmp = ':blank::mdot_blossom: ' + str(ev[i]) + ' - All day'
+                res.append((tmp, len(tmp) + emotes_offset * 2))
+        else:
+            tmp = ':blank::mdot_blossom: ' + str(ev[i]) + ' - ' + str(time_strs)
             res.append((tmp, len(tmp) + emotes_offset * 2))
-        except:
-            tmp = ':blank::mdot_blossom: ' + str(ev[i]) + ' - All day'
-            res.append((tmp, len(tmp) + emotes_offset * 2))
-    res.sort(key=lambda x: x[0].split(' @ ')[1])
+    res.sort(key=lambda x: ('All-day' not in x[0], x[0].split('All-day from ')[1] if 'All-day' in x[0] else x[0].split(' @ ')[1]))
     res.insert(0, ('**EVENTS:**', len('**EVENTS:**')))
     res.append(('', 0))
     return res
